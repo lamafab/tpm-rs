@@ -53,10 +53,10 @@ impl PasswordSession {
 }
 
 impl Session for PasswordSession {
-    fn get_auth_command<CMD: TpmCommand>(
+    fn get_auth_command<CmdT: TpmCommand>(
         &mut self,
-        _cmd: &CMD,
-        _cmd_handles: &CMD::Handles,
+        _cmd: &CmdT,
+        _cmd_handles: &CmdT::Handles,
     ) -> TpmsAuthCommand {
         TpmsAuthCommand {
             session_handle: TpmiShAuthSession::RS_PW,
@@ -65,7 +65,12 @@ impl Session for PasswordSession {
             hmac: self.auth,
         }
     }
-    fn validate_auth_response(&mut self, auth: &TpmsAuthResponse) -> TssResult<()> {
+    fn validate_auth_response<CmdT: TpmCommand>(
+        &mut self,
+        _cmd: &CmdT,
+        _cmd_handles: &CmdT::Handles,
+        auth: &TpmsAuthResponse,
+    ) -> TssResult<()> {
         // Password response auth should have empty nonce/hmac and ContinueSession attribute.
         if auth.nonce.get_size() != 0
             || auth.session_attributes.0 != 0x1

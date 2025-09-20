@@ -18,7 +18,12 @@ impl Session for NoSession {
     ) -> TpmsAuthCommand {
         unreachable!()
     }
-    fn validate_auth_response(&mut self, _: &TpmsAuthResponse) -> TssResult<()> {
+    fn validate_auth_response<CmdT: TpmCommand>(
+        &mut self,
+        _cmd: &CmdT,
+        _cmd_handles: &CmdT::Handles,
+        _auth: &TpmsAuthResponse,
+    ) -> TssResult<()> {
         // unreachable macro may interfere with #42. If it does we can just
         // replace it with a loop {}.
         unreachable!()

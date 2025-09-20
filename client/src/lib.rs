@@ -122,24 +122,27 @@ pub fn read_response_header(buffer: &[u8]) -> TssResult<(RespHeader, usize)> {
 
 /// Unmarshals any response sessions.
 pub fn read_response_sessions<
+    CmdT: TpmCommand,
     X: Session,
     Y: Session,
     Z: Session,
     AA: AuthorizationArea<X, Y, Z>,
 >(
-    sessions: &mut AA,
+    cmd: &CmdT,
+    cmd_handles: &CmdT::Handles,
+    cmd_sessions: &mut AA,
     buffer: &mut UnmarshalBuf,
 ) -> TssResult<()> {
-    let (s1, s2, s3) = sessions.decompose_mut();
+    let (s1, s2, s3) = cmd_sessions.decompose_mut();
     let Some(s1) = s1 else { return Ok(()) };
     let auth = TpmsAuthResponse::try_unmarshal(buffer)?;
-    s1.validate_auth_response(&auth)?;
+    s1.validate_auth_response(cmd, cmd_handles, &auth)?;
     let Some(s2) = s2 else { return Ok(()) };
     let auth = TpmsAuthResponse::try_unmarshal(buffer)?;
-    s2.validate_auth_response(&auth)?;
+    s2.validate_auth_response(cmd, cmd_handles, &auth)?;
     let Some(s3) = s3 else { return Ok(()) };
     let auth = TpmsAuthResponse::try_unmarshal(buffer)?;
-    s3.validate_auth_response(&auth)?;
+    s3.validate_auth_response(cmd, cmd_handles, &auth)?;
     Ok(())
 }
 
@@ -183,7 +186,7 @@ pub fn run_command_with_handles<
         let _param_size = u32::try_unmarshal(&mut unmarsh)?;
     }
     let resp = CmdT::RespT::try_unmarshal(&mut unmarsh)?;
-    read_response_sessions(cmd_sessions, &mut unmarsh)?;
+    read_response_sessions(cmd, cmd_handles, cmd_sessions, &mut unmarsh)?;
 
     if !unmarsh.is_empty() {
         return TssResult::Err(TssTcsError::TpmUnexpected.into());
