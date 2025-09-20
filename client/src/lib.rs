@@ -56,7 +56,7 @@ where
     CmdT: TpmCommand,
     T: Tpm,
 {
-    Ok(run_command_with_handles(cmd, CmdT::Handles::default(), &mut (), tpm)?.0)
+    Ok(run_command_with_handles(cmd, &CmdT::Handles::default(), &mut (), tpm)?.0)
 }
 
 /// This function serializes the size of the authorization area. `buffer` should
@@ -80,6 +80,7 @@ pub fn write_command_sessions<
     AA: AuthorizationArea<X, Y, Z>,
 >(
     cmd: &CMD,
+    cmd_handles: &CMD::Handles,
     sessions: &mut AA,
     buffer: &mut [u8],
 ) -> TssResult<usize> {
@@ -92,19 +93,19 @@ pub fn write_command_sessions<
         return marshal_auth_size(auth_offset, buffer);
     };
     auth_offset += s1
-        .get_auth_command(cmd)
+        .get_auth_command(cmd, cmd_handles)
         .try_marshal(&mut buffer[auth_offset..])?;
     let Some(s2) = s2 else {
         return marshal_auth_size(auth_offset, buffer);
     };
     auth_offset += s2
-        .get_auth_command(cmd)
+        .get_auth_command(cmd, cmd_handles)
         .try_marshal(&mut buffer[auth_offset..])?;
     let Some(s3) = s3 else {
         return marshal_auth_size(auth_offset, buffer);
     };
     auth_offset += s3
-        .get_auth_command(cmd)
+        .get_auth_command(cmd, cmd_handles)
         .try_marshal(&mut buffer[auth_offset..])?;
     marshal_auth_size(auth_offset, buffer)
 }
@@ -144,28 +145,24 @@ pub fn read_response_sessions<
 
 /// Runs a command with provided handles and sessions.
 pub fn run_command_with_handles<
-    CmdT,
-    T,
+    CmdT: TpmCommand,
+    T: Tpm,
     X: Session,
     Y: Session,
     Z: Session,
     AA: AuthorizationArea<X, Y, Z>,
 >(
     cmd: &CmdT,
-    cmd_handles: CmdT::Handles,
+    cmd_handles: &CmdT::Handles,
     cmd_sessions: &mut AA,
     tpm: &mut T,
-) -> TssResult<(CmdT::RespT, CmdT::RespHandles)>
-where
-    CmdT: TpmCommand,
-    T: Tpm,
-{
+) -> TssResult<(CmdT::RespT, CmdT::RespHandles)> {
     let mut cmd_buffer = [0u8; CMD_BUFFER_SIZE];
     let mut cmd_header = CmdHeader::new(cmd_sessions.is_empty(), CmdT::CMD_CODE);
     let mut written = cmd_header.try_marshal(&mut cmd_buffer)?;
 
     written += cmd_handles.try_marshal(&mut cmd_buffer[written..])?;
-    written += write_command_sessions(cmd, cmd_sessions, &mut cmd_buffer[written..])?;
+    written += write_command_sessions(cmd, cmd_handles, cmd_sessions, &mut cmd_buffer[written..])?;
     written += cmd.try_marshal(&mut cmd_buffer[written..])?;
 
     // Update the command size

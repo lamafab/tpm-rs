@@ -11,7 +11,11 @@ pub struct NoSession {
 }
 
 impl Session for NoSession {
-    fn get_auth_command<T: TpmCommand>(&mut self, _cmd: &T) -> TpmsAuthCommand {
+    fn get_auth_command<CMD: TpmCommand>(
+        &mut self,
+        _cmd: &CMD,
+        _cmd_handles: &CMD::Handles,
+    ) -> TpmsAuthCommand {
         unreachable!()
     }
     fn validate_auth_response(&mut self, _: &TpmsAuthResponse) -> TssResult<()> {

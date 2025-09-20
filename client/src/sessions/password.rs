@@ -53,7 +53,11 @@ impl PasswordSession {
 }
 
 impl Session for PasswordSession {
-    fn get_auth_command<T: TpmCommand>(&mut self, _cmd: &T) -> TpmsAuthCommand {
+    fn get_auth_command<CMD: TpmCommand>(
+        &mut self,
+        _cmd: &CMD,
+        _cmd_handles: &CMD::Handles,
+    ) -> TpmsAuthCommand {
         TpmsAuthCommand {
             session_handle: TpmiShAuthSession::RS_PW,
             nonce: Tpm2bNonce::default(),
