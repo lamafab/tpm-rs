@@ -181,9 +181,9 @@ fn test_response_missing_sessions() {
     fake_tpm.add_to_response(&TpmHandle(77));
 
     let cmd = TestHandlesCommand();
-    let session = PasswordSession::default();
+    let mut session = PasswordSession::default();
     assert_eq!(
-        run_command_with_handles(&cmd, TpmHandle::RSPW, session, &mut fake_tpm),
+        run_command_with_handles(&cmd, TpmHandle::RSPW, &mut session, &mut fake_tpm),
         Err(TpmRcError::Memory.into())
     );
 }
@@ -202,9 +202,9 @@ fn test_response_session_fails_validation() {
     fake_tpm.add_to_response(&invalid_auth);
 
     let cmd = TestHandlesCommand();
-    let session = PasswordSession::default();
+    let mut session = PasswordSession::default();
     assert_eq!(
-        run_command_with_handles(&cmd, TpmHandle::RSPW, session, &mut fake_tpm),
+        run_command_with_handles(&cmd, TpmHandle::RSPW, &mut session, &mut fake_tpm),
         Err(validation_failure.err().unwrap())
     );
 }
