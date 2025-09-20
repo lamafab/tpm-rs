@@ -4,4 +4,13 @@ impl AuthorizationArea<NoSession, NoSession, NoSession> for () {
     fn decompose_ref(&self) -> (Option<&NoSession>, Option<&NoSession>, Option<&NoSession>) {
         (None, None, None)
     }
+    fn decompose_mut(
+        &mut self,
+    ) -> (
+        Option<&mut NoSession>,
+        Option<&mut NoSession>,
+        Option<&mut NoSession>,
+    ) {
+        (None, None, None)
+    }
 }

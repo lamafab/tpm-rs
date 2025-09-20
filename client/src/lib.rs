@@ -56,7 +56,7 @@ where
     CmdT: TpmCommand,
     T: Tpm,
 {
-    Ok(run_command_with_handles(cmd, CmdT::Handles::default(), (), tpm)?.0)
+    Ok(run_command_with_handles(cmd, CmdT::Handles::default(), &mut (), tpm)?.0)
 }
 
 /// This function serializes the size of the authorization area. `buffer` should
@@ -73,36 +73,38 @@ fn marshal_auth_size(auth_offset: usize, buffer: &mut [u8]) -> TssResult<usize> 
 
 /// Adds any command sessions to the command buffer.
 pub fn write_command_sessions<
+    CMD: TpmCommand,
     X: Session,
     Y: Session,
     Z: Session,
     AA: AuthorizationArea<X, Y, Z>,
 >(
-    sessions: &AA,
+    cmd: &CMD,
+    sessions: &mut AA,
     buffer: &mut [u8],
 ) -> TssResult<usize> {
     if sessions.is_empty() {
         return Ok(0);
     }
     let mut auth_offset = size_of::<u32>();
-    let (s1, s2, s3) = sessions.decompose_ref();
+    let (s1, s2, s3) = sessions.decompose_mut();
     let Some(s1) = s1 else {
         return marshal_auth_size(auth_offset, buffer);
     };
     auth_offset += s1
-        .get_auth_command()
+        .get_auth_command(cmd)
         .try_marshal(&mut buffer[auth_offset..])?;
     let Some(s2) = s2 else {
         return marshal_auth_size(auth_offset, buffer);
     };
     auth_offset += s2
-        .get_auth_command()
+        .get_auth_command(cmd)
         .try_marshal(&mut buffer[auth_offset..])?;
     let Some(s3) = s3 else {
         return marshal_auth_size(auth_offset, buffer);
     };
     auth_offset += s3
-        .get_auth_command()
+        .get_auth_command(cmd)
         .try_marshal(&mut buffer[auth_offset..])?;
     marshal_auth_size(auth_offset, buffer)
 }
@@ -124,10 +126,10 @@ pub fn read_response_sessions<
     Z: Session,
     AA: AuthorizationArea<X, Y, Z>,
 >(
-    sessions: &AA,
+    sessions: &mut AA,
     buffer: &mut UnmarshalBuf,
 ) -> TssResult<()> {
-    let (s1, s2, s3) = sessions.decompose_ref();
+    let (s1, s2, s3) = sessions.decompose_mut();
     let Some(s1) = s1 else { return Ok(()) };
     let auth = TpmsAuthResponse::try_unmarshal(buffer)?;
     s1.validate_auth_response(&auth)?;
@@ -151,7 +153,7 @@ pub fn run_command_with_handles<
 >(
     cmd: &CmdT,
     cmd_handles: CmdT::Handles,
-    cmd_sessions: AA,
+    cmd_sessions: &mut AA,
     tpm: &mut T,
 ) -> TssResult<(CmdT::RespT, CmdT::RespHandles)>
 where
@@ -163,7 +165,7 @@ where
     let mut written = cmd_header.try_marshal(&mut cmd_buffer)?;
 
     written += cmd_handles.try_marshal(&mut cmd_buffer[written..])?;
-    written += write_command_sessions(&cmd_sessions, &mut cmd_buffer[written..])?;
+    written += write_command_sessions(cmd, cmd_sessions, &mut cmd_buffer[written..])?;
     written += cmd.try_marshal(&mut cmd_buffer[written..])?;
 
     // Update the command size
@@ -184,7 +186,7 @@ where
         let _param_size = u32::try_unmarshal(&mut unmarsh)?;
     }
     let resp = CmdT::RespT::try_unmarshal(&mut unmarsh)?;
-    read_response_sessions(&cmd_sessions, &mut unmarsh)?;
+    read_response_sessions(cmd_sessions, &mut unmarsh)?;
 
     if !unmarsh.is_empty() {
         return TssResult::Err(TssTcsError::TpmUnexpected.into());

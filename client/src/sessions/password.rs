@@ -1,4 +1,5 @@
 use crate::sessions::Session;
+use tpm2_rs_base::commands::TpmCommand;
 use tpm2_rs_base::errors::{TpmRcResult, TssResult, TssTcsError};
 use tpm2_rs_base::{
     Tpm2bAuth, Tpm2bNonce, Tpm2bSimple, TpmaSession, TpmiShAuthSession, TpmsAuthCommand,
@@ -52,7 +53,7 @@ impl PasswordSession {
 }
 
 impl Session for PasswordSession {
-    fn get_auth_command(&self) -> TpmsAuthCommand {
+    fn get_auth_command<T: TpmCommand>(&mut self, _cmd: &T) -> TpmsAuthCommand {
         TpmsAuthCommand {
             session_handle: TpmiShAuthSession::RS_PW,
             nonce: Tpm2bNonce::default(),
@@ -60,7 +61,7 @@ impl Session for PasswordSession {
             hmac: self.auth,
         }
     }
-    fn validate_auth_response(&self, auth: &TpmsAuthResponse) -> TssResult<()> {
+    fn validate_auth_response(&mut self, auth: &TpmsAuthResponse) -> TssResult<()> {
         // Password response auth should have empty nonce/hmac and ContinueSession attribute.
         if auth.nonce.get_size() != 0
             || auth.session_attributes.0 != 0x1
