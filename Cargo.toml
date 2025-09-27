@@ -2,7 +2,7 @@
 resolver = "2"
 members = [
     "base",
-    "client",
+    "client", "clientv2",
     "errors",
     "marshalable",
     "marshalable-derive",
