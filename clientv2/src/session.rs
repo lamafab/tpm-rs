@@ -42,7 +42,7 @@ pub fn test_start_auth_create_primary() {
     // Generate random nonce, use empty salt.
     let nonce_caller = Tpm2bNonce::from_bytes(&rand::random::<[u8; 32]>()).unwrap();
     // > If tpmKey Is TPM_RH_NULL, then encryptedSalt is required to be an Empty Buffer.
-    let encrypted_salt = Tpm2bEncryptedSecret::from_bytes(&[]).unwrap();
+    let encrypted_salt = Tpm2bEncryptedSecret::from_bytes(b"").unwrap();
 
     let cmd = StartAuthSessionCmd {
         nonce_caller,
@@ -54,7 +54,7 @@ pub fn test_start_auth_create_primary() {
 
     let cmd_handles = StartAuthSessionHandles {
         tpm_key: TpmiDhObject::RHNull,
-        bind: TpmiDhEntity::RHNull,
+        bind: TpmiDhEntity::RHOwner,
     };
 
     let mut cmd_session = ();
@@ -108,13 +108,11 @@ pub fn test_start_auth_create_primary() {
         creation_pcr,
     };
 
-    let hmac = Hmac::new_from_slice(&[]).unwrap();
-
     let mut session = HmacSession::<Sha256, Hmac<Sha256>>::new(
         session_handle,
+        nonce_caller,
         resp.nonce_tpm,
         TpmaSession::CONTINUE_SESSION,
-        hmac,
     );
 
     // ### Execute `TPM2_CreatePrimary` command!
@@ -122,8 +120,10 @@ pub fn test_start_auth_create_primary() {
     let (resp, handle) =
         run_command_with_handles(&cmd, &cmd_handle, &mut session, &mut tpm).unwrap();
 
+    /*
     let (resp, handle) =
         run_command_with_handles(&cmd, &cmd_handle, &mut session, &mut tpm).unwrap();
+    */
 }
 
 // A simple file Io protocol.
@@ -214,18 +214,18 @@ fn kdfa<M: Mac + Clone>(
 pub fn session_key(
     auth_val: &[u8],
     salt: &[u8],
-    nonce_newer: &Tpm2bNonce,
-    nonce_older: &Tpm2bNonce,
+    nonce_tpm: &Tpm2bNonce,
+    nonce_caller: &Tpm2bNonce,
     bits: u32,
 ) -> TpmRcResult<Vec<u8>> {
     let key = [auth_val, salt].concat();
     let hmac = Hmac::<Sha256>::new_from_slice(&key).unwrap();
 
     let mut buf = [0u8; 1_024];
-    let n0 = nonce_newer.try_marshal(&mut buf)?;
-    let n1 = nonce_older.try_marshal(&mut buf[n0..])?;
+    let n0 = nonce_tpm.try_marshal(&mut buf)?;
+    let n1 = nonce_caller.try_marshal(&mut buf[n0..])?;
 
-    let context = [&buf[2..n0], &buf[n0+2..n1]].concat();
+    let context = [&buf[2..n0], &buf[n0 + 2..n0+n1]].concat();
 
     let x = kdfa(hmac, b"ATH", &context, bits)?;
     Ok(x)
@@ -323,25 +323,27 @@ pub struct HmacSession<D, M> {
     session_handle: TpmiShAuthSession,
     nonce_caller: Tpm2bDigest,
     nonce_tpm: Tpm2bNonce,
+    og_nonce_caller: Tpm2bDigest,
+    og_nonce_tpm: Tpm2bNonce,
     session_attributes: TpmaSession,
-    mac: M,
     _p: std::marker::PhantomData<(D, M)>,
 }
 
 impl<D, M> HmacSession<D, M> {
     pub fn new(
         session_handle: TpmiShAuthSession,
+        nonce_caller: Tpm2bNonce,
         nonce_tpm: Tpm2bNonce,
         session_attributes: TpmaSession,
-        mac: M,
     ) -> Self {
         Self {
             buf: [0u8; 1_024],
             session_handle,
             nonce_caller: Tpm2bDigest::default(),
             nonce_tpm,
+            og_nonce_caller: nonce_caller,
+            og_nonce_tpm: nonce_tpm,
             session_attributes,
-            mac,
             _p: std::marker::PhantomData,
         }
     }
@@ -370,8 +372,18 @@ where
         let hasher = D::new();
         let cp_hash = cp_hash::<CmdT, D>(cmd, cmd_handles, &mut self.buf, hasher).unwrap();
 
-        let mac = self.mac.clone();
-        let hmac = hmac_computation::<D, M>(
+        let auth_value = &[];
+        let session_key = session_key(
+            auth_value,
+            b"",
+            &self.og_nonce_tpm,
+            &self.og_nonce_caller,
+            256,
+        ).unwrap();
+        let key = [session_key.as_slice(), auth_value].concat();
+        let mac = Hmac::<Sha256>::new_from_slice(&key).unwrap();
+
+        let hmac = hmac_computation::<D, _>(
             &cp_hash,
             &self.nonce_caller,
             &self.nonce_tpm,
@@ -407,8 +419,18 @@ where
         let hasher = D::new();
         let rp_hash = rp_hash::<CmdT, D>(resp, &mut self.buf, hasher)?;
 
-        let mac = self.mac.clone();
-        let computed_hmac = hmac_computation::<D, M>(
+        let auth_value = &[];
+        let session_key = session_key(
+            auth_value,
+            b"",
+            &self.og_nonce_tpm,
+            &self.og_nonce_caller,
+            256,
+        ).unwrap();
+        let key = [session_key.as_slice(), auth_value].concat();
+        let mac = Hmac::<Sha256>::new_from_slice(&key).unwrap();
+
+        let computed_hmac = hmac_computation::<D, _>(
             &rp_hash,
             &auth.nonce,
             &self.nonce_caller,

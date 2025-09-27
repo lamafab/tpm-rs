@@ -375,6 +375,7 @@ pub enum TpmiYesNo {
 #[derive(Copy, Clone, PartialEq, Default, Marshalable)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum TpmiDhObject {
+    RHOwner = TpmHandle::RHOwner.0,
     RHNull = TpmHandle::RHNull.0,
 }
 
