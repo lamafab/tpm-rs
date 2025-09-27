@@ -82,11 +82,7 @@ pub fn read_response_header(buffer: &[u8]) -> TssResult<(RespHeader, usize)> {
 }
 
 /// Runs a command with provided handles and sessions.
-pub fn run_command_with_handles<
-    CmdT,
-    TpmT,
-    AA: AuthorizationArea,
->(
+pub fn run_command_with_handles<CmdT, TpmT, AA: AuthorizationArea>(
     cmd: &CmdT,
     cmd_handles: &CmdT::Handles,
     // TODO: Maybe use `()` for no session?
