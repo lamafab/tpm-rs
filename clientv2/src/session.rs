@@ -288,28 +288,34 @@ pub fn hmac_computation<D, M>(
     auth_val: &[u8],
     session_key: &[u8],
     p_hash: &GenericArray<u8, <D as OutputSizeUser>::OutputSize>,
-    // TODO: Should be `Tpm2bNonce`?
-    nonce_newer: &Tpm2bDigest,
-    nonce_older: &Tpm2bDigest,
+    nonce_newer: &Tpm2bNonce,
+    nonce_older: &Tpm2bNonce,
     session_attributes: &TpmaSession,
-    buf: &mut [u8],
 ) -> TpmRcResult<Tpm2bDigest>
 where
     D: Digest,
     M: hmac::digest::Mac + hmac::digest::crypto_common::KeyInit,
 {
-    let key = [session_key, auth_val].concat();
+    let mut buf = vec![0u8; 1_024];
+
+    let n0 = session_key.len();
+    let n1 = auth_val.len();
+
+    buf[00..n0 + 00].copy_from_slice(session_key);
+    buf[n0..n0 + n1].copy_from_slice(auth_val);
+
+    let key = &buf[..n0 + n1];
     let mut mac = <M as Mac>::new_from_slice(&key).unwrap();
 
     mac.update(p_hash);
 
-    let n = nonce_newer.try_marshal(buf)?;
+    let n = nonce_newer.try_marshal(&mut buf)?;
     mac.update(&buf[2..n]); // NOTE: excluding size indicator!
 
-    let n = nonce_older.try_marshal(buf)?;
+    let n = nonce_older.try_marshal(&mut buf)?;
     mac.update(&buf[2..n]); // NOTE: excluding size indicator!
 
-    let n = session_attributes.try_marshal(buf)?;
+    let n = session_attributes.try_marshal(&mut buf)?;
     mac.update(&buf[..n]);
 
     let hmac = mac.finalize().into_bytes();
@@ -384,7 +390,6 @@ where
             &self.nonce_caller,
             &self.nonce_tpm,
             &self.session_attributes,
-            &mut self.buf,
         )
         .unwrap();
 
@@ -426,7 +431,6 @@ where
             &auth.nonce,
             &self.nonce_caller,
             &self.session_attributes,
-            &mut self.buf,
         )
         .unwrap();
 
