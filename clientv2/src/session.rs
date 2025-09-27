@@ -1,10 +1,5 @@
 use hmac::{
-    digest::{
-        core_api::{BlockSizeUser, CoreProxy},
-        crypto_common::KeySizeUser,
-        generic_array::GenericArray,
-        OutputSizeUser,
-    },
+    digest::{generic_array::GenericArray, OutputSizeUser},
     Hmac, Mac,
 };
 use sha2::{Digest, Sha256};
@@ -210,6 +205,38 @@ fn kdfa<M: Mac + Clone>(
     Ok(result)
 }
 
+pub fn session_key_v2<M>(
+    auth_val: &[u8],
+    salt: &[u8],
+    nonce_tpm: &Tpm2bNonce,
+    nonce_caller: &Tpm2bNonce,
+    bits: u32,
+    buf: &mut [u8],
+) -> TpmRcResult<Vec<u8>>
+where
+    M: Clone + hmac::digest::Mac + hmac::digest::crypto_common::KeyInit,
+{
+    let n0 = auth_val.len();
+    let n1 = salt.len();
+
+    buf[00..n0 + 00].copy_from_slice(auth_val);
+    buf[n0..n0 + n1].copy_from_slice(salt);
+
+    let key = &buf[..n0 + n1];
+    let mac = <M as Mac>::new_from_slice(key).unwrap();
+
+    let n0 = nonce_tpm.get_size() as usize;
+    let n1 = nonce_caller.get_size() as usize;
+
+    buf[00..n0 + 00].copy_from_slice(nonce_tpm.get_buffer());
+    buf[n0..n0 + n1].copy_from_slice(nonce_caller.get_buffer());
+
+    let context = &buf[..n0 + n1];
+    let x = kdfa(mac, b"ATH", context, bits)?;
+
+    Ok(x)
+}
+
 // TODO: Clean this up.
 pub fn session_key(
     auth_val: &[u8],
@@ -222,19 +249,19 @@ pub fn session_key(
     let n0 = auth_val.len();
     let n1 = salt.len();
 
-    buf[00..n0+00].copy_from_slice(auth_val);
-    buf[n0..n0+n1].copy_from_slice(salt);
+    buf[00..n0 + 00].copy_from_slice(auth_val);
+    buf[n0..n0 + n1].copy_from_slice(salt);
 
-    let key = &buf[..n0+n1];
+    let key = &buf[..n0 + n1];
     let hmac = Hmac::<Sha256>::new_from_slice(key).unwrap();
 
     let n0 = nonce_tpm.get_size() as usize;
     let n1 = nonce_caller.get_size() as usize;
 
-    buf[00..n0+00].copy_from_slice(nonce_tpm.get_buffer());
-    buf[n0..n0+n1].copy_from_slice(nonce_caller.get_buffer());
+    buf[00..n0 + 00].copy_from_slice(nonce_tpm.get_buffer());
+    buf[n0..n0 + n1].copy_from_slice(nonce_caller.get_buffer());
 
-    let context = &buf[..n0+n1];
+    let context = &buf[..n0 + n1];
     let x = kdfa(hmac, b"ATH", context, bits)?;
 
     Ok(x)
@@ -389,7 +416,8 @@ where
             &self.og_nonce_caller,
             256,
             &mut self.buf,
-        ).unwrap();
+        )
+        .unwrap();
         let key = [session_key.as_slice(), auth_value].concat();
         let mac = Hmac::<Sha256>::new_from_slice(&key).unwrap();
 
@@ -437,7 +465,8 @@ where
             &self.og_nonce_caller,
             256,
             &mut self.buf,
-        ).unwrap();
+        )
+        .unwrap();
         let key = [session_key.as_slice(), auth_value].concat();
         let mac = Hmac::<Sha256>::new_from_slice(&key).unwrap();
 
