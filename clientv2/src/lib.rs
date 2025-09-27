@@ -18,8 +18,8 @@ pub trait Session {
     /// Computes the authorization HMAC for this session.
     fn get_auth_command<CmdT: TpmCommand>(
         &mut self,
-        resp: &CmdT::RespT,
-        resp_handles: &CmdT::RespHandles,
+        cmd: &CmdT,
+        cmd_handles: &CmdT::Handles,
     ) -> TpmsAuthCommand;
     /// Validates the authorization response for this session.
     fn validate_auth_response<CmdT: TpmCommand>(
@@ -69,42 +69,6 @@ fn marshal_auth_size(auth_offset: usize, buffer: &mut [u8]) -> TssResult<usize> 
     Ok(auth_offset)
 }
 
-/// Adds any command sessions to the command buffer.
-pub fn write_command_sessions<
-    X: Session,
-    Y: Session,
-    Z: Session,
-    AA: AuthorizationArea<X, Y, Z>,
->(
-    sessions: &AA,
-    buffer: &mut [u8],
-) -> TssResult<usize> {
-    if sessions.is_empty() {
-        return Ok(0);
-    }
-    let mut auth_offset = size_of::<u32>();
-    let (s1, s2, s3) = sessions.decompose_ref();
-    let Some(s1) = s1 else {
-        return marshal_auth_size(auth_offset, buffer);
-    };
-    auth_offset += s1
-        .get_auth_command()
-        .try_marshal(&mut buffer[auth_offset..])?;
-    let Some(s2) = s2 else {
-        return marshal_auth_size(auth_offset, buffer);
-    };
-    auth_offset += s2
-        .get_auth_command()
-        .try_marshal(&mut buffer[auth_offset..])?;
-    let Some(s3) = s3 else {
-        return marshal_auth_size(auth_offset, buffer);
-    };
-    auth_offset += s3
-        .get_auth_command()
-        .try_marshal(&mut buffer[auth_offset..])?;
-    marshal_auth_size(auth_offset, buffer)
-}
-
 /// Umarshals the response header and checks the contained response code.
 pub fn read_response_header(buffer: &[u8]) -> TssResult<(RespHeader, usize)> {
     let mut unmarsh = UnmarshalBuf::new(buffer);
@@ -115,6 +79,7 @@ pub fn read_response_header(buffer: &[u8]) -> TssResult<(RespHeader, usize)> {
     Ok((resp_header, buffer.len() - unmarsh.len()))
 }
 
+/*
 /// Unmarshals any response sessions.
 pub fn read_response_sessions<
     X: Session,
@@ -137,6 +102,7 @@ pub fn read_response_sessions<
     s3.validate_auth_response(&auth)?;
     Ok(())
 }
+*/
 
 /// Runs a command with provided handles and sessions.
 pub fn run_command_with_handles<
@@ -161,7 +127,8 @@ where
     let mut written = cmd_header.try_marshal(&mut cmd_buffer)?;
 
     written += cmd_handles.try_marshal(&mut cmd_buffer[written..])?;
-    written += write_command_sessions(&cmd_sessions, &mut cmd_buffer[written..])?;
+    // TODO
+    //written += write_command_sessions(&cmd_sessions, &mut cmd_buffer[written..])?;
     written += cmd.try_marshal(&mut cmd_buffer[written..])?;
 
     // Update the command size
@@ -182,7 +149,8 @@ where
         let _param_size = u32::try_unmarshal(&mut unmarsh)?;
     }
     let resp = CmdT::RespT::try_unmarshal(&mut unmarsh)?;
-    read_response_sessions(&cmd_sessions, &mut unmarsh)?;
+    // TODO
+    //read_response_sessions(&cmd_sessions, &mut unmarsh)?;
 
     if !unmarsh.is_empty() {
         return TssResult::Err(TssTcsError::TpmUnexpected.into());
@@ -209,4 +177,63 @@ pub trait AuthorizationArea2Plus<T: Session, U: Session, V: Session>:
     AuthorizationArea1Plus<T, U, V>
 {
     fn decompose_ref(&self) -> (&T, &U, Option<&V>);
+}
+
+pub trait AA {
+    fn write_session_data<CmdT: TpmCommand>(
+        &mut self,
+        cmd: &CmdT,
+        handles: &CmdT::Handles,
+        buf: &mut [u8],
+    ) -> TssResult<usize>;
+}
+
+impl<T: Session> AA for T {
+    fn write_session_data<CmdT: TpmCommand>(
+        &mut self,
+        cmd: &CmdT,
+        handles: &CmdT::Handles,
+        buf: &mut [u8],
+    ) -> TssResult<usize> {
+        const SIZE_LEN: usize = 4;
+
+        if buf.len() < 4 {
+            return TssResult::Err(TssTcsError::OutOfMemory.into());
+        }
+
+        let n = self
+            .get_auth_command(cmd, handles)
+            .try_marshal(&mut buf[SIZE_LEN..])?;
+
+        (n as u32).try_marshal(&mut buf[..SIZE_LEN]).expect("TODO");
+
+        Ok(SIZE_LEN + n)
+    }
+}
+
+impl<T: Session> AA for [T; 2] {
+    fn write_session_data<CmdT: TpmCommand>(
+        &mut self,
+        cmd: &CmdT,
+        handles: &CmdT::Handles,
+        buf: &mut [u8],
+    ) -> TssResult<usize> {
+        let n0 = self[0].write_session_data(cmd, handles, buf)?;
+        let n1 = self[1].write_session_data(cmd, handles, buf)?;
+        Ok(n0 + n1)
+    }
+}
+
+impl<T: Session> AA for [T; 3] {
+    fn write_session_data<CmdT: TpmCommand>(
+        &mut self,
+        cmd: &CmdT,
+        handles: &CmdT::Handles,
+        buf: &mut [u8],
+    ) -> TssResult<usize> {
+        let n0 = self[0].write_session_data(cmd, handles, buf)?;
+        let n1 = self[1].write_session_data(cmd, handles, buf)?;
+        let n2 = self[2].write_session_data(cmd, handles, buf)?;
+        Ok(n0 + n1 + n2)
+    }
 }
