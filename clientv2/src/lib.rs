@@ -202,9 +202,31 @@ impl<T: Session> AuthorizationArea for T {
     }
 }
 
-impl<T: Session> AuthorizationArea for [&mut T; 2] {
+impl<T: Session> AuthorizationArea for [T; 1] {
     fn has_sessions(&self) -> bool {
-        todo!()
+        self[0].has_sessions()
+    }
+    fn write_session_data<CmdT: TpmCommand>(
+        &mut self,
+        cmd: &CmdT,
+        handles: &CmdT::Handles,
+        buf: &mut [u8],
+    ) -> TssResult<usize> {
+        self[0].write_session_data(cmd, handles, buf)
+    }
+    fn read_response_data<CmdT: TpmCommand>(
+        &mut self,
+        cmd: &CmdT,
+        resp: &CmdT::RespT,
+        buf: &mut UnmarshalBuf,
+    ) -> TssResult<()> {
+        self[0].read_response_data(cmd, resp, buf)
+    }
+}
+
+impl<T: Session> AuthorizationArea for [T; 2] {
+    fn has_sessions(&self) -> bool {
+        self.iter().any(|t| t.has_sessions())
     }
     fn write_session_data<CmdT: TpmCommand>(
         &mut self,
@@ -228,9 +250,9 @@ impl<T: Session> AuthorizationArea for [&mut T; 2] {
     }
 }
 
-impl<T: Session> AuthorizationArea for [&mut T; 3] {
+impl<T: Session> AuthorizationArea for [T; 3] {
     fn has_sessions(&self) -> bool {
-        todo!()
+        self.iter().any(|t| t.has_sessions())
     }
     fn write_session_data<CmdT: TpmCommand>(
         &mut self,
