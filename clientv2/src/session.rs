@@ -166,6 +166,76 @@ impl Tpm for FileIoTpm {
     }
 }
 
+trait AlgoDigest {
+    type Output: AsRef<[u8]>;
+    type Hmac: AlgoDigestHmac;
+    type Hasher: AlgoDigestHasher;
+
+    fn new_hmac(key: &[u8]) -> Self::Hmac;
+    fn new_hasher() -> Self::Hasher;
+    fn output_size() -> usize;
+}
+
+trait AlgoDigestHasher {
+    type Output;
+
+    fn update(&mut self, data: &[u8]);
+    fn finalize(self) -> Self::Output;
+}
+
+trait AlgoDigestHmac {
+    type Output;
+
+    fn update(&mut self, data: &[u8]);
+    fn finalize(self) -> Self::Output;
+}
+
+pub struct AlgoDigestSha256;
+
+impl AlgoDigest for AlgoDigestSha256 {
+    type Output = [u8; 32];
+    type Hmac = AlgoDigestSha256Hmac;
+    type Hasher = AlgoDigestSha256Hasher;
+
+    fn new_hmac(key: &[u8]) -> Self::Hmac {
+        todo!()
+    }
+
+    fn new_hasher() -> Self::Hasher {
+        todo!()
+    }
+
+    fn output_size() -> usize {
+        todo!()
+    }
+}
+
+pub struct AlgoDigestSha256Hasher;
+
+impl AlgoDigestHasher for AlgoDigestSha256Hasher {
+    type Output = ();
+
+    fn update(&mut self, data: &[u8]) {
+        todo!()
+    }
+    fn finalize(self) -> Self::Output {
+        todo!()
+    }
+}
+
+pub struct AlgoDigestSha256Hmac;
+
+impl AlgoDigestHmac for AlgoDigestSha256Hmac {
+    type Output = ();
+
+    fn update(&mut self, data: &[u8]) {
+        todo!()
+    }
+    fn finalize(self) -> Self::Output {
+        todo!()
+    }
+}
+
 /// Spec: 9.4.10.2 KDFa()
 fn kdfa<M>(key: &[u8], label: &[u8], context: &[u8]) -> TssResult<Vec<u8>>
 where
