@@ -25,7 +25,7 @@ pub trait Session {
     fn validate_auth_response<CmdT: TpmCommand>(
         &mut self,
         cmd: &CmdT,
-        cmd_handles: &CmdT::Handles,
+        resp: &CmdT::RespT,
         auth: &TpmsAuthResponse,
     ) -> TssResult<()>;
 }
@@ -167,6 +167,12 @@ pub trait AuthorizationArea {
         handles: &CmdT::Handles,
         buf: &mut [u8],
     ) -> TssResult<usize>;
+    fn read_response_data<CmdT: TpmCommand>(
+        &mut self,
+        cmd: &CmdT,
+        resp: &CmdT::RespT,
+        buf: &mut UnmarshalBuf,
+    ) -> TssResult<()>;
 }
 
 impl<T: Session> AuthorizationArea for T {
@@ -190,6 +196,17 @@ impl<T: Session> AuthorizationArea for T {
 
         Ok(SIZE_LEN + n)
     }
+    fn read_response_data<CmdT: TpmCommand>(
+        &mut self,
+        cmd: &CmdT,
+        resp: &CmdT::RespT,
+        buf: &mut UnmarshalBuf,
+    ) -> TssResult<()> {
+        let auth = TpmsAuthResponse::try_unmarshal(buf)?;
+        self.validate_auth_response(cmd, resp, &auth)?;
+
+        Ok(())
+    }
 }
 
 impl<T: Session> AuthorizationArea for [T; 2] {
@@ -203,6 +220,15 @@ impl<T: Session> AuthorizationArea for [T; 2] {
         n += self[0].write_session_data(cmd, handles, &mut buf[n..])?;
         n += self[1].write_session_data(cmd, handles, &mut buf[n..])?;
         Ok(n)
+    }
+    fn read_response_data<CmdT: TpmCommand>(
+        &mut self,
+        cmd: &CmdT,
+        resp: &CmdT::RespT,
+        buf: &mut UnmarshalBuf,
+    ) -> TssResult<()> {
+        self[0].read_response_data(cmd, resp, buf)?;
+        self[1].read_response_data(cmd, resp, buf)
     }
 }
 
@@ -218,5 +244,15 @@ impl<T: Session> AuthorizationArea for [T; 3] {
         n += self[1].write_session_data(cmd, handles, &mut buf[n..])?;
         n += self[2].write_session_data(cmd, handles, &mut buf[n..])?;
         Ok(n)
+    }
+    fn read_response_data<CmdT: TpmCommand>(
+        &mut self,
+        cmd: &CmdT,
+        resp: &CmdT::RespT,
+        buf: &mut UnmarshalBuf,
+    ) -> TssResult<()> {
+        self[0].read_response_data(cmd, resp, buf)?;
+        self[1].read_response_data(cmd, resp, buf)?;
+        self[2].read_response_data(cmd, resp, buf)
     }
 }
