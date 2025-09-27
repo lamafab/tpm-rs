@@ -84,27 +84,25 @@ pub fn read_response_header(buffer: &[u8]) -> TssResult<(RespHeader, usize)> {
 /// Runs a command with provided handles and sessions.
 pub fn run_command_with_handles<
     CmdT,
-    T,
-    X: Session,
-    Y: Session,
-    Z: Session,
+    TpmT,
     AA: AuthorizationArea,
 >(
     cmd: &CmdT,
     cmd_handles: &CmdT::Handles,
-    cmd_sessions: &mut Option<AA>,
-    tpm: &mut T,
+    // TODO: Maybe use `()` for no session?
+    mut cmd_sessions: Option<&mut AA>,
+    tpm: &mut TpmT,
 ) -> TssResult<(CmdT::RespT, CmdT::RespHandles)>
 where
     CmdT: TpmCommand,
-    T: Tpm,
+    TpmT: Tpm,
 {
     let mut cmd_buffer = [0u8; CMD_BUFFER_SIZE];
     let mut cmd_header = CmdHeader::new(cmd_sessions.is_some(), CmdT::CMD_CODE);
     let mut written = cmd_header.try_marshal(&mut cmd_buffer)?;
 
     written += cmd_handles.try_marshal(&mut cmd_buffer[written..])?;
-    if let Some(sessions) = cmd_sessions {
+    if let Some(sessions) = cmd_sessions.as_mut() {
         written += sessions.write_session_data(cmd, cmd_handles, &mut cmd_buffer[written..])?;
     }
     written += cmd.try_marshal(&mut cmd_buffer[written..])?;
@@ -127,7 +125,7 @@ where
         let _param_size = u32::try_unmarshal(&mut unmarsh)?;
     }
     let resp = CmdT::RespT::try_unmarshal(&mut unmarsh)?;
-    if let Some(sessions) = cmd_sessions {
+    if let Some(sessions) = cmd_sessions.as_mut() {
         sessions.read_response_data(cmd, &resp, &mut unmarsh)?;
     }
 

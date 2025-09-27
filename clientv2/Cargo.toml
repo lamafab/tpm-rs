@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 tpm2-rs-base = { workspace = true }
 tpm2-rs-marshalable = { workspace = true }
+tpm2-rs-errors = { workspace = true, features = ["debug"] }
 #
 hex = "0.4.3"
 hmac = "0.12.1"
