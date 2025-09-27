@@ -16,9 +16,18 @@ pub trait Tpm {
 /// Trait for types representing TPM sessions.
 pub trait Session {
     /// Computes the authorization HMAC for this session.
-    fn get_auth_command(&self) -> TpmsAuthCommand;
+    fn get_auth_command<CmdT: TpmCommand>(
+        &mut self,
+        resp: &CmdT::RespT,
+        resp_handles: &CmdT::RespHandles,
+    ) -> TpmsAuthCommand;
     /// Validates the authorization response for this session.
-    fn validate_auth_response(&self, auth: &TpmsAuthResponse) -> TssResult<()>;
+    fn validate_auth_response<CmdT: TpmCommand>(
+        &mut self,
+        cmd: &CmdT,
+        cmd_handles: &CmdT::Handles,
+        auth: &TpmsAuthResponse,
+    ) -> TssResult<()>;
 }
 
 #[repr(C)]
@@ -28,6 +37,7 @@ pub struct CmdHeader {
     size: u32,
     code: TpmCc,
 }
+
 impl CmdHeader {
     pub fn new(has_sessions: bool, code: TpmCc) -> CmdHeader {
         let tag = if has_sessions {
@@ -183,10 +193,8 @@ where
 /// A trait for authorization area with (possibly zero) unkown number of sessions.
 /// Check top level module documentation.
 pub trait AuthorizationArea<T: Session, U: Session, V: Session> {
-    fn decompose_ref(&self) -> (Option<&T>, Option<&U>, Option<&V>);
-    fn is_empty(&self) -> bool {
-        self.decompose_ref().0.is_none()
-    }
+    fn decompose(&mut self) -> (Option<&T>, Option<&U>, Option<&V>);
+    fn is_empty(&self) -> bool;
 }
 
 /// Authorization area with 1+ sessions
