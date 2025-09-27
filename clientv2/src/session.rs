@@ -214,7 +214,7 @@ pub fn session_key_v2<M>(
     nonce_caller: &Tpm2bNonce,
     bits: u32,
     buf: &mut [u8],
-) -> TpmRcResult<Vec<u8>>
+) -> TssResult<Vec<u8>>
 where
     M: hmac::digest::Mac + hmac::digest::crypto_common::KeyInit,
 {
@@ -222,15 +222,23 @@ where
 
     // TODO: error handling (buf size check)!
     let mut append = |data: &[u8]| {
+        let buf = &mut buf[n..];
+
         let l = data.len();
-        buf[n..n+l].copy_from_slice(data);
+        if buf.len() < l {
+            return TssResult::Err(TssTcsError::OutOfMemory.into());
+        }
+
+        buf[..l].copy_from_slice(data);
         n += l;
+
+        Ok(())
     };
 
-    append(auth_val);
-    append(salt);
-    append(nonce_tpm.get_buffer());
-    append(nonce_caller.get_buffer());
+    append(auth_val)?;
+    append(salt)?;
+    append(nonce_tpm.get_buffer())?;
+    append(nonce_caller.get_buffer())?;
 
     let n0 = auth_val.len() + salt.len();
     let n1 = nonce_tpm.get_size() as usize + nonce_caller.get_size() as usize;
