@@ -356,8 +356,8 @@ impl Session for HmacSession {
     }
     fn validate_auth_response<CmdT: TpmCommand>(
         &mut self,
-        cmd: &CmdT,
         resp: &CmdT::RespT,
+        // TODO: Do something with that? Validate it?
         resp_handles: &CmdT::RespHandles,
         auth: &TpmsAuthResponse,
     ) -> TssResult<()> {

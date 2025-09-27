@@ -26,7 +26,6 @@ pub trait Session {
     /// Validates the authorization response for this session.
     fn validate_auth_response<CmdT: TpmCommand>(
         &mut self,
-        cmd: &CmdT,
         resp: &CmdT::RespT,
         resp_handles: &CmdT::RespHandles,
         auth: &TpmsAuthResponse,
@@ -123,7 +122,7 @@ where
 
     // Unmarshal response parameters.
     let resp = CmdT::RespT::try_unmarshal(&mut unmarsh)?;
-    cmd_sessions.read_response_data(cmd, &resp, &resp_handles, &mut unmarsh)?;
+    cmd_sessions.read_response_data::<CmdT>(&resp, &resp_handles, &mut unmarsh)?;
 
     if !unmarsh.is_empty() {
         return TssResult::Err(TssTcsError::TpmUnexpected.into());
@@ -143,8 +142,8 @@ pub trait AuthorizationArea {
     ) -> TssResult<usize>;
     fn read_response_data<CmdT: TpmCommand>(
         &mut self,
-        cmd: &CmdT,
         resp: &CmdT::RespT,
+        // TODO: This needed?
         resp_handles: &CmdT::RespHandles,
         buf: &mut UnmarshalBuf,
     ) -> TssResult<()>;
@@ -164,7 +163,6 @@ impl AuthorizationArea for () {
     }
     fn read_response_data<CmdT: TpmCommand>(
         &mut self,
-        _cmd: &CmdT,
         _resp: &CmdT::RespT,
         _resp_handles: &CmdT::RespHandles,
         _buf: &mut UnmarshalBuf,
@@ -199,13 +197,12 @@ impl<T: Session> AuthorizationArea for T {
     }
     fn read_response_data<CmdT: TpmCommand>(
         &mut self,
-        cmd: &CmdT,
         resp: &CmdT::RespT,
         resp_handles: &CmdT::RespHandles,
         buf: &mut UnmarshalBuf,
     ) -> TssResult<()> {
         let auth = TpmsAuthResponse::try_unmarshal(buf)?;
-        self.validate_auth_response(cmd, resp, resp_handles, &auth)?;
+        self.validate_auth_response::<CmdT>(resp, resp_handles, &auth)?;
 
         Ok(())
     }
@@ -225,12 +222,11 @@ impl<T: Session> AuthorizationArea for [T; 1] {
     }
     fn read_response_data<CmdT: TpmCommand>(
         &mut self,
-        cmd: &CmdT,
         resp: &CmdT::RespT,
         resp_handles: &CmdT::RespHandles,
         buf: &mut UnmarshalBuf,
     ) -> TssResult<()> {
-        self[0].read_response_data(cmd, resp, resp_handles, buf)
+        self[0].read_response_data::<CmdT>(resp, resp_handles, buf)
     }
 }
 
@@ -251,13 +247,12 @@ impl<T: Session> AuthorizationArea for [T; 2] {
     }
     fn read_response_data<CmdT: TpmCommand>(
         &mut self,
-        cmd: &CmdT,
         resp: &CmdT::RespT,
         resp_handles: &CmdT::RespHandles,
         buf: &mut UnmarshalBuf,
     ) -> TssResult<()> {
-        self[0].read_response_data(cmd, resp, resp_handles, buf)?;
-        self[1].read_response_data(cmd, resp, resp_handles, buf)
+        self[0].read_response_data::<CmdT>(resp, resp_handles, buf)?;
+        self[1].read_response_data::<CmdT>(resp, resp_handles, buf)
     }
 }
 
@@ -279,13 +274,12 @@ impl<T: Session> AuthorizationArea for [T; 3] {
     }
     fn read_response_data<CmdT: TpmCommand>(
         &mut self,
-        cmd: &CmdT,
         resp: &CmdT::RespT,
         resp_handles: &CmdT::RespHandles,
         buf: &mut UnmarshalBuf,
     ) -> TssResult<()> {
-        self[0].read_response_data(cmd, resp, resp_handles, buf)?;
-        self[1].read_response_data(cmd, resp, resp_handles, buf)?;
-        self[2].read_response_data(cmd, resp, resp_handles, buf)
+        self[0].read_response_data::<CmdT>(resp, resp_handles, buf)?;
+        self[1].read_response_data::<CmdT>(resp, resp_handles, buf)?;
+        self[2].read_response_data::<CmdT>(resp, resp_handles, buf)
     }
 }
