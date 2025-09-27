@@ -169,19 +169,23 @@ impl Tpm for FileIoTpm {
 }
 
 /// Spec: 9.4.10.2 KDFa()
-fn kdfa<M>(
+fn kdfa<D, M>(
     key: &[u8],
-    label: &[u8],   // Label
-    context: &[u8], // Context
-    bits: u32,      // L (length in bits)
-) -> TpmRcResult<Vec<u8>>
+    label: &[u8],
+    context: &[u8],
+) -> TssResult<Vec<u8>>
 where
+    D: Digest,
     M: hmac::digest::Mac + hmac::digest::crypto_common::KeyInit,
 {
-    let mut result = Vec::new();
+    let mut buffer = Vec::with_capacity(<D as Digest>::output_size());
     let mut counter = 1u32;
 
-    while result.len() < (bits as usize + 7) / 8 {
+    let bits = <D as Digest>::output_size() * 8;
+    dbg!(bits);
+
+    // TODO: This is kind of weird.
+    while buffer.len() < (bits + 7) / 8 {
         let mut mac = <M as Mac>::new_from_slice(key).unwrap();
 
         mac.update(&counter.to_be_bytes());
@@ -192,63 +196,38 @@ where
             mac.update(&[0x00]);
         }
         mac.update(context);
-        mac.update(&bits.to_be_bytes());
+        mac.update(&(bits as u32).to_be_bytes());
 
         // > After each iteration, the HMAC digest data is concatenated to the
         // > previously produced value until the size of the concatenated string is
         // > at least as large as the requested value. The string is then truncated
         // > to the desired size (which causes the loss of some of the most recently
         // > added bits), and the value is returned.
-        result.extend_from_slice(&mac.finalize().into_bytes());
+        // TODO: Call `finalize_reset()`?
+        buffer.extend_from_slice(&mac.finalize().into_bytes());
+
         counter += 1;
     }
 
-    result.truncate((bits as usize + 7) / 8);
-    Ok(result)
+    buffer.truncate((bits + 7) / 8);
+    Ok(buffer)
 }
 
-pub fn session_key_v2<M>(
+pub fn session_key_v2<D, M>(
     auth_val: &[u8],
     salt: &[u8],
     nonce_tpm: &Tpm2bNonce,
     nonce_caller: &Tpm2bNonce,
-    bits: u32,
-    buf: &mut [u8],
 ) -> TssResult<Vec<u8>>
 where
+    D: Digest,
     M: hmac::digest::Mac + hmac::digest::crypto_common::KeyInit,
 {
-    let mut n = 0;
+    let key = [auth_val, salt].concat();
+    let context = [nonce_tpm.get_buffer(), nonce_caller.get_buffer()].concat();
 
-    // TODO: error handling (buf size check)!
-    let mut append = |data: &[u8]| {
-        let buf = &mut buf[n..];
-
-        let l = data.len();
-        if buf.len() < l {
-            return TssResult::Err(TssTcsError::OutOfMemory.into());
-        }
-
-        buf[..l].copy_from_slice(data);
-        n += l;
-
-        Ok(())
-    };
-
-    append(auth_val)?;
-    append(salt)?;
-    append(nonce_tpm.get_buffer())?;
-    append(nonce_caller.get_buffer())?;
-
-    let n0 = auth_val.len() + salt.len();
-    let n1 = nonce_tpm.get_size() as usize + nonce_caller.get_size() as usize;
-
-    let key = &buf[..n0];
-    let context = &buf[n0..n0 + n1];
-
-    let x = kdfa::<M>(key, b"ATH", context, bits)?;
-
-    Ok(x)
+    let buffer = kdfa::<D, M>(&key, b"ATH", &context)?;
+    Ok(buffer)
 }
 
 // TODO: Clean this up.
@@ -424,18 +403,17 @@ where
         let hasher = D::new();
         let cp_hash = cp_hash::<CmdT, D>(cmd, cmd_handles, &mut self.buf, hasher).unwrap();
 
-        let auth_value = &[];
-        let session_key = session_key_v2::<M>(
-            auth_value,
+        let auth_val = &[];
+        let session_key = session_key_v2::<D, M>(
+            auth_val,
             b"",
             &self.og_nonce_tpm,
             &self.og_nonce_caller,
-            256,
-            &mut self.buf,
         )
         .unwrap();
-        let key = [session_key.as_slice(), auth_value].concat();
-        let mac = Hmac::<Sha256>::new_from_slice(&key).unwrap();
+
+        let key = [session_key.as_slice(), auth_val].concat();
+        let mac = <M as Mac>::new_from_slice(&key).unwrap();
 
         let hmac = hmac_computation::<D, _>(
             &cp_hash,
@@ -473,18 +451,17 @@ where
         let hasher = D::new();
         let rp_hash = rp_hash::<CmdT, D>(resp, &mut self.buf, hasher)?;
 
-        let auth_value = &[];
-        let session_key = session_key_v2::<M>(
-            auth_value,
+        let auth_val = &[];
+        let session_key = session_key_v2::<D, M>(
+            auth_val,
             b"",
             &self.og_nonce_tpm,
             &self.og_nonce_caller,
-            256,
-            &mut self.buf,
         )
         .unwrap();
-        let key = [session_key.as_slice(), auth_value].concat();
-        let mac = Hmac::<Sha256>::new_from_slice(&key).unwrap();
+
+        let key = [session_key.as_slice(), auth_val].concat();
+        let mac = <M as Mac>::new_from_slice(&key).unwrap();
 
         let computed_hmac = hmac_computation::<D, _>(
             &rp_hash,
