@@ -98,7 +98,6 @@ fn test_start_auth_create_primary() {
         session_handle,
         TpmaSession::CONTINUE_SESSION,
         Some(session_key),
-        nonce_caller,
         resp.nonce_tpm,
     );
 

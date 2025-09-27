@@ -42,7 +42,6 @@ impl<D> HmacSession<D> {
         session_handle: TpmiShAuthSession,
         session_attributes: TpmaSession,
         session_key: Option<Vec<u8>>,
-        nonce_caller: Tpm2bNonce,
         nonce_tpm: Tpm2bNonce,
     ) -> Self {
         Self {
@@ -87,7 +86,7 @@ where
             .map(|k| k.as_slice())
             .unwrap_or(&[]);
 
-        let hmac = hmac_computation::<D::Hmac>(
+        let computed_hmac = hmac_computation::<D::Hmac>(
             auth_val,
             &session_key,
             cp_hash.as_ref(),
@@ -101,7 +100,7 @@ where
             session_handle: self.session_handle,
             nonce: self.nonce_caller,
             session_attributes: self.session_attributes,
-            hmac,
+            hmac: computed_hmac,
         }
     }
     /// Spec (Part 1): 16.8 Response Parameter Hash
@@ -143,10 +142,7 @@ where
         )
         .unwrap();
 
-        // TODO: Make this nicer.
-        let computed_hmac = Tpm2bData::from_bytes(&computed_hmac.get_buffer()[..32]).unwrap();
-
-        if auth.hmac != computed_hmac {
+        if auth.hmac.get_buffer() != computed_hmac.get_buffer() {
             // TODO: Change error variant?
             return Err(TssTcsError::BadParameter.into());
         }
