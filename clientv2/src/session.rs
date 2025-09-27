@@ -240,12 +240,17 @@ fn kdfa<M>(key: &[u8], label: &[u8], context: &[u8]) -> TssResult<Vec<u8>>
 where
     M: AlgoDigestHmac,
 {
+    // TODO: Use array?
     let mut buffer = Vec::with_capacity(M::output_size());
     let mut counter = 1u32;
 
+    // TODO:
+    // > If bits is not an even multiple of 8, then the returned value occupies
+    // > the least significant bits of the returned octet array,
     let bits = M::output_size() * 8;
 
-    // TODO: This is kind of weird.
+    // > The implied return from this function is a sequence of octets with a
+    // > length equal to (bits + 7) / 8.
     while buffer.len() < (bits + 7) / 8 {
         let mut mac = M::new(key);
 
@@ -283,6 +288,7 @@ pub fn session_key_v2<M>(
 where
     M: AlgoDigestHmac,
 {
+    // TODO: Use array?
     let key = [auth_val, salt].concat();
     let context = [nonce_tpm.get_buffer(), nonce_caller.get_buffer()].concat();
 
@@ -298,6 +304,7 @@ where
 pub fn cp_hash<CmdT: TpmCommand, H: AlgoDigestHasher>(
     cmd: &CmdT,
     cmd_handles: &CmdT::Handles,
+    // TODO: Use internal buffer?
     buf: &mut [u8],
 ) -> TpmRcResult<H::Output> {
     let mut hash = H::new();
@@ -320,6 +327,7 @@ pub fn cp_hash<CmdT: TpmCommand, H: AlgoDigestHasher>(
 /// > command audits.
 pub fn rp_hash<CmdT: TpmCommand, H: AlgoDigestHasher>(
     resp: &CmdT::RespT,
+    // TODO: Use internal buffer?
     buf: &mut [u8],
 ) -> TpmRcResult<H::Output> {
     let mut hash = H::new();
