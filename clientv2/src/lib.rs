@@ -41,9 +41,9 @@ pub struct CmdHeader {
 impl CmdHeader {
     pub fn new(has_sessions: bool, code: TpmCc) -> CmdHeader {
         let tag = if has_sessions {
-            TpmiStCommandTag::NoSessions
-        } else {
             TpmiStCommandTag::Sessions
+        } else {
+            TpmiStCommandTag::NoSessions
         };
         CmdHeader { tag, size: 0, code }
     }
@@ -111,11 +111,11 @@ pub fn run_command_with_handles<
     X: Session,
     Y: Session,
     Z: Session,
-    AA: AuthorizationArea<X, Y, Z>,
+    AA: AuthorizationArea,
 >(
     cmd: &CmdT,
-    cmd_handles: CmdT::Handles,
-    cmd_sessions: AA,
+    cmd_handles: &CmdT::Handles,
+    cmd_sessions: Option<&mut AA>,
     tpm: &mut T,
 ) -> TssResult<(CmdT::RespT, CmdT::RespHandles)>
 where
@@ -123,12 +123,13 @@ where
     T: Tpm,
 {
     let mut cmd_buffer = [0u8; CMD_BUFFER_SIZE];
-    let mut cmd_header = CmdHeader::new(cmd_sessions.is_empty(), CmdT::CMD_CODE);
+    let mut cmd_header = CmdHeader::new(cmd_sessions.is_some(), CmdT::CMD_CODE);
     let mut written = cmd_header.try_marshal(&mut cmd_buffer)?;
 
     written += cmd_handles.try_marshal(&mut cmd_buffer[written..])?;
-    // TODO
-    //written += write_command_sessions(&cmd_sessions, &mut cmd_buffer[written..])?;
+    if let Some(sessions) = cmd_sessions {
+        written += sessions.write_session_data(cmd, cmd_handles, &mut cmd_buffer[written..])?;
+    }
     written += cmd.try_marshal(&mut cmd_buffer[written..])?;
 
     // Update the command size
@@ -158,28 +159,8 @@ where
     Ok((resp, resp_handles))
 }
 
-/// A trait for authorization area with (possibly zero) unkown number of sessions.
-/// Check top level module documentation.
-pub trait AuthorizationArea<T: Session, U: Session, V: Session> {
-    fn decompose(&mut self) -> (Option<&T>, Option<&U>, Option<&V>);
-    fn is_empty(&self) -> bool;
-}
-
-/// Authorization area with 1+ sessions
-pub trait AuthorizationArea1Plus<T: Session, U: Session, V: Session>:
-    AuthorizationArea<T, U, V>
-{
-    fn decompose_ref(&self) -> (&T, Option<&U>, Option<&V>);
-}
-
-/// Authorization area with 2+ sessions
-pub trait AuthorizationArea2Plus<T: Session, U: Session, V: Session>:
-    AuthorizationArea1Plus<T, U, V>
-{
-    fn decompose_ref(&self) -> (&T, &U, Option<&V>);
-}
-
-pub trait AA {
+// TODO: Define CmdT at top level?
+pub trait AuthorizationArea {
     fn write_session_data<CmdT: TpmCommand>(
         &mut self,
         cmd: &CmdT,
@@ -188,7 +169,7 @@ pub trait AA {
     ) -> TssResult<usize>;
 }
 
-impl<T: Session> AA for T {
+impl<T: Session> AuthorizationArea for T {
     fn write_session_data<CmdT: TpmCommand>(
         &mut self,
         cmd: &CmdT,
@@ -211,7 +192,7 @@ impl<T: Session> AA for T {
     }
 }
 
-impl<T: Session> AA for [T; 2] {
+impl<T: Session> AuthorizationArea for [T; 2] {
     fn write_session_data<CmdT: TpmCommand>(
         &mut self,
         cmd: &CmdT,
@@ -224,7 +205,7 @@ impl<T: Session> AA for [T; 2] {
     }
 }
 
-impl<T: Session> AA for [T; 3] {
+impl<T: Session> AuthorizationArea for [T; 3] {
     fn write_session_data<CmdT: TpmCommand>(
         &mut self,
         cmd: &CmdT,
