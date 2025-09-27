@@ -2,7 +2,7 @@ use hmac::{
     digest::{generic_array::GenericArray, OutputSizeUser},
     Mac,
 };
-use sha2::{Digest};
+use sha2::Digest;
 use std::{
     fs::OpenOptions,
     io::{Read, Write},
@@ -448,8 +448,7 @@ where
 
         let auth_val = &[];
         let session_key =
-            session_key_v2::<M>(auth_val, b"", &self.og_nonce_tpm, &self.og_nonce_caller)
-                .unwrap();
+            session_key_v2::<M>(auth_val, b"", &self.og_nonce_tpm, &self.og_nonce_caller).unwrap();
 
         let hmac = hmac_computation::<D, M>(
             auth_val,
@@ -489,8 +488,7 @@ where
 
         let auth_val = &[];
         let session_key =
-            session_key_v2::<M>(auth_val, b"", &self.og_nonce_tpm, &self.og_nonce_caller)
-                .unwrap();
+            session_key_v2::<M>(auth_val, b"", &self.og_nonce_tpm, &self.og_nonce_caller).unwrap();
 
         let computed_hmac = hmac_computation::<D, M>(
             auth_val,
