@@ -271,7 +271,6 @@ pub fn rp_hash<CmdT: TpmCommand, D: Digest>(
     let n = resp.try_marshal(buf)?;
     hasher.update(&buf[..n]);
 
-    // TODO: Should write directly to `buf`!
     let hash = hasher.finalize();
     Ok(hash)
 }
