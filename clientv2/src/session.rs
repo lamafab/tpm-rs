@@ -248,7 +248,7 @@ pub fn hmac_computation<M: Mac>(
 }
 
 // A simple Hmac session (TODO: this should probably do some extra work).
-pub struct HmacSession<D: Digest> {
+pub struct HmacSession<D> {
     // TODO: const size should be standardized?
     buf: [u8; 1_024],
     session_handle: TpmiShAuthSession,
@@ -258,7 +258,7 @@ pub struct HmacSession<D: Digest> {
     _p: std::marker::PhantomData<D>,
 }
 
-impl<D: Digest> HmacSession<D> {
+impl<D> HmacSession<D> {
     pub fn new(
         session_handle: TpmiShAuthSession,
         nonce_tpm: Tpm2bNonce,
@@ -275,7 +275,10 @@ impl<D: Digest> HmacSession<D> {
     }
 }
 
-impl<D: Digest> Session for HmacSession<D> {
+impl<D> Session for HmacSession<D>
+where
+    D: Digest,
+{
     fn get_auth_command<CmdT: TpmCommand>(
         &mut self,
         cmd: &CmdT,
