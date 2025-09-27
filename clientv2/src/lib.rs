@@ -199,9 +199,10 @@ impl<T: Session> AuthorizationArea for [T; 2] {
         handles: &CmdT::Handles,
         buf: &mut [u8],
     ) -> TssResult<usize> {
-        let n0 = self[0].write_session_data(cmd, handles, buf)?;
-        let n1 = self[1].write_session_data(cmd, handles, buf)?;
-        Ok(n0 + n1)
+        let mut n = 0;
+        n += self[0].write_session_data(cmd, handles, &mut buf[n..])?;
+        n += self[1].write_session_data(cmd, handles, &mut buf[n..])?;
+        Ok(n)
     }
 }
 
@@ -212,9 +213,10 @@ impl<T: Session> AuthorizationArea for [T; 3] {
         handles: &CmdT::Handles,
         buf: &mut [u8],
     ) -> TssResult<usize> {
-        let n0 = self[0].write_session_data(cmd, handles, buf)?;
-        let n1 = self[1].write_session_data(cmd, handles, buf)?;
-        let n2 = self[2].write_session_data(cmd, handles, buf)?;
-        Ok(n0 + n1 + n2)
+        let mut n = 0;
+        n += self[0].write_session_data(cmd, handles, &mut buf[n..])?;
+        n += self[1].write_session_data(cmd, handles, &mut buf[n..])?;
+        n += self[2].write_session_data(cmd, handles, &mut buf[n..])?;
+        Ok(n)
     }
 }
