@@ -114,10 +114,8 @@ pub fn test_start_auth_create_primary() {
     let (resp, handle) =
         run_command_with_handles(&cmd, &cmd_handle, &mut session, &mut tpm).unwrap();
 
-    /*
     let (resp, handle) =
-        run_command_with_handles(&cmd, &cmd_handle, Some(&mut session), &mut tpm).unwrap();
-    */
+        run_command_with_handles(&cmd, &cmd_handle, &mut session, &mut tpm).unwrap();
 }
 
 // A simple file Io protocol.
