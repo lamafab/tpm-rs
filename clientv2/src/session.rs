@@ -1,8 +1,8 @@
 use hmac::{
     digest::{generic_array::GenericArray, OutputSizeUser},
-    Hmac, Mac,
+    Mac,
 };
-use sha2::{Digest, Sha256};
+use sha2::{Digest};
 use std::{
     fs::OpenOptions,
     io::{Read, Write},
@@ -103,7 +103,7 @@ pub fn test_start_auth_create_primary() {
         creation_pcr,
     };
 
-    let mut session = HmacSession::<Sha256, Hmac<Sha256>>::new(
+    let mut session = HmacSession::<sha2::Sha256, hmac::Hmac<sha2::Sha256>>::new(
         session_handle,
         nonce_caller,
         resp.nonce_tpm,
@@ -167,15 +167,14 @@ impl Tpm for FileIoTpm {
 }
 
 /// Spec: 9.4.10.2 KDFa()
-fn kdfa<D, M>(key: &[u8], label: &[u8], context: &[u8]) -> TssResult<Vec<u8>>
+fn kdfa<M>(key: &[u8], label: &[u8], context: &[u8]) -> TssResult<Vec<u8>>
 where
-    D: Digest,
     M: hmac::digest::Mac + hmac::digest::crypto_common::KeyInit,
 {
-    let mut buffer = Vec::with_capacity(<D as Digest>::output_size());
+    let mut buffer = Vec::with_capacity(M::output_size());
     let mut counter = 1u32;
 
-    let bits = <D as Digest>::output_size() * 8;
+    let bits = M::output_size() * 8;
 
     // TODO: This is kind of weird.
     while buffer.len() < (bits + 7) / 8 {
@@ -206,20 +205,19 @@ where
     Ok(buffer)
 }
 
-pub fn session_key_v2<D, M>(
+pub fn session_key_v2<M>(
     auth_val: &[u8],
     salt: &[u8],
     nonce_tpm: &Tpm2bNonce,
     nonce_caller: &Tpm2bNonce,
 ) -> TssResult<Vec<u8>>
 where
-    D: Digest,
     M: hmac::digest::Mac + hmac::digest::crypto_common::KeyInit,
 {
     let key = [auth_val, salt].concat();
     let context = [nonce_tpm.get_buffer(), nonce_caller.get_buffer()].concat();
 
-    let buffer = kdfa::<D, M>(&key, b"ATH", &context)?;
+    let buffer = kdfa::<M>(&key, b"ATH", &context)?;
     Ok(buffer)
 }
 
@@ -379,7 +377,7 @@ where
 
         let auth_val = &[];
         let session_key =
-            session_key_v2::<D, M>(auth_val, b"", &self.og_nonce_tpm, &self.og_nonce_caller)
+            session_key_v2::<M>(auth_val, b"", &self.og_nonce_tpm, &self.og_nonce_caller)
                 .unwrap();
 
         let hmac = hmac_computation::<D, M>(
@@ -420,7 +418,7 @@ where
 
         let auth_val = &[];
         let session_key =
-            session_key_v2::<D, M>(auth_val, b"", &self.og_nonce_tpm, &self.og_nonce_caller)
+            session_key_v2::<M>(auth_val, b"", &self.og_nonce_tpm, &self.og_nonce_caller)
                 .unwrap();
 
         let computed_hmac = hmac_computation::<D, M>(
