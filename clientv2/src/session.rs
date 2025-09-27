@@ -30,29 +30,28 @@ pub struct HmacSession<D> {
     // TODO: const size should be standardized?
     buf: [u8; 1_024],
     session_handle: TpmiShAuthSession,
+    session_attributes: TpmaSession,
+    session_key: Option<Vec<u8>>,
     nonce_caller: Tpm2bDigest,
     nonce_tpm: Tpm2bNonce,
-    og_nonce_caller: Tpm2bDigest,
-    og_nonce_tpm: Tpm2bNonce,
-    session_attributes: TpmaSession,
     _p: std::marker::PhantomData<D>,
 }
 
 impl<D> HmacSession<D> {
     pub fn new(
         session_handle: TpmiShAuthSession,
+        session_attributes: TpmaSession,
+        session_key: Option<Vec<u8>>,
         nonce_caller: Tpm2bNonce,
         nonce_tpm: Tpm2bNonce,
-        session_attributes: TpmaSession,
     ) -> Self {
         Self {
             buf: [0u8; 1_024],
             session_handle,
+            session_attributes,
+            session_key,
             nonce_caller: Tpm2bDigest::default(),
             nonce_tpm,
-            og_nonce_caller: nonce_caller,
-            og_nonce_tpm: nonce_tpm,
-            session_attributes,
             _p: std::marker::PhantomData,
         }
     }
@@ -81,9 +80,12 @@ where
         let cp_hash = cp_hash::<CmdT, D::Hasher>(cmd, cmd_handles, &mut self.buf).unwrap();
 
         let auth_val = &[];
-        let session_key =
-            session_key::<D::Hmac>(auth_val, b"", &self.og_nonce_tpm, &self.og_nonce_caller)
-                .unwrap();
+
+        let session_key = self
+            .session_key
+            .as_ref()
+            .map(|k| k.as_slice())
+            .unwrap_or(&[]);
 
         let hmac = hmac_computation::<D::Hmac>(
             auth_val,
@@ -125,9 +127,11 @@ where
         let rp_hash = rp_hash::<CmdT, D::Hasher>(resp, &mut self.buf)?;
 
         let auth_val = &[];
-        let session_key =
-            session_key::<D::Hmac>(auth_val, b"", &self.og_nonce_tpm, &self.og_nonce_caller)
-                .unwrap();
+        let session_key = self
+            .session_key
+            .as_ref()
+            .map(|k| k.as_slice())
+            .unwrap_or(&[]);
 
         let computed_hmac = hmac_computation::<D::Hmac>(
             auth_val,

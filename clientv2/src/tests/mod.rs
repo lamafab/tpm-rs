@@ -1,5 +1,6 @@
 use crate::{
-    algo::AlgoSha256,
+    algo::{AlgoSha256, AlgoSha256Hasher, AlgoSha256Hmac},
+    crypto::session_key,
     session::HmacSession,
     tpm::{run_command_with_handles, FileIoTpm},
 };
@@ -90,11 +91,15 @@ fn test_start_auth_create_primary() {
         creation_pcr,
     };
 
+    let session_key =
+        session_key::<AlgoSha256Hmac>(&[], &[], &resp.nonce_tpm, &nonce_caller).unwrap();
+
     let mut session = HmacSession::<AlgoSha256>::new(
         session_handle,
+        TpmaSession::CONTINUE_SESSION,
+        Some(session_key),
         nonce_caller,
         resp.nonce_tpm,
-        TpmaSession::CONTINUE_SESSION,
     );
 
     // ### Execute `TPM2_CreatePrimary` command!

@@ -11,10 +11,10 @@ where
 {
     // TODO: Use array?
     let mut buffer = Vec::with_capacity(M::output_size());
+    let mut mac = M::new(key);
+
     let counter = 1u32;
     let bits = M::output_size() as u32 * 8;
-
-    let mut mac = M::new(key);
 
     mac.update(&counter.to_be_bytes());
     mac.update(label);
