@@ -2,7 +2,7 @@ use hmac::{
     digest::{generic_array::GenericArray, OutputSizeUser},
     Mac,
 };
-use sha2::{Digest};
+use sha2::Digest;
 use std::{
     fs::OpenOptions,
     io::{Read, Write},
@@ -103,7 +103,7 @@ pub fn test_start_auth_create_primary() {
         creation_pcr,
     };
 
-    let mut session = HmacSession::<sha2::Sha256, hmac::Hmac<sha2::Sha256>>::new(
+    let mut session = HmacSession::<AlgoSha256>::new(
         session_handle,
         nonce_caller,
         resp.nonce_tpm,
@@ -166,10 +166,79 @@ impl Tpm for FileIoTpm {
     }
 }
 
+pub trait AlgoDigest {
+    type Hasher: AlgoDigestHasher;
+    type Hmac: AlgoDigestHmac;
+}
+
+pub trait AlgoDigestHasher {
+    type Output: AsRef<[u8]>;
+
+    fn new() -> Self;
+    fn output_size() -> usize;
+    fn update(&mut self, data: &[u8]);
+    fn finalize(self) -> Self::Output;
+}
+
+pub trait AlgoDigestHmac {
+    type Output: AsRef<[u8]>;
+
+    fn new(key: &[u8]) -> Self;
+    fn output_size() -> usize;
+    fn update(&mut self, data: &[u8]);
+    fn finalize(self) -> Self::Output;
+}
+
+pub struct AlgoSha256;
+
+impl AlgoDigest for AlgoSha256 {
+    type Hmac = AlgoSha256Hmac;
+    type Hasher = AlgoSha256Hasher;
+}
+
+pub struct AlgoSha256Hasher(sha2::Sha256);
+
+impl AlgoDigestHasher for AlgoSha256Hasher {
+    type Output = [u8; 32];
+
+    fn new() -> Self {
+        AlgoSha256Hasher(sha2::Sha256::new())
+    }
+    fn output_size() -> usize {
+        32
+    }
+    fn update(&mut self, data: &[u8]) {
+        self.0.update(data);
+    }
+    fn finalize(self) -> Self::Output {
+        self.0.finalize().into()
+    }
+}
+
+pub struct AlgoSha256Hmac(hmac::Hmac<sha2::Sha256>);
+
+impl AlgoDigestHmac for AlgoSha256Hmac {
+    type Output = [u8; 32];
+
+    fn new(key: &[u8]) -> Self {
+        // TODO: Unwrap
+        AlgoSha256Hmac(hmac::Hmac::new_from_slice(key).unwrap())
+    }
+    fn output_size() -> usize {
+        32
+    }
+    fn update(&mut self, data: &[u8]) {
+        self.0.update(data);
+    }
+    fn finalize(self) -> Self::Output {
+        self.0.finalize().into_bytes().into()
+    }
+}
+
 /// Spec: 9.4.10.2 KDFa()
 fn kdfa<M>(key: &[u8], label: &[u8], context: &[u8]) -> TssResult<Vec<u8>>
 where
-    M: hmac::digest::Mac + hmac::digest::crypto_common::KeyInit,
+    M: AlgoDigestHmac,
 {
     let mut buffer = Vec::with_capacity(M::output_size());
     let mut counter = 1u32;
@@ -178,7 +247,7 @@ where
 
     // TODO: This is kind of weird.
     while buffer.len() < (bits + 7) / 8 {
-        let mut mac = <M as Mac>::new_from_slice(key).unwrap();
+        let mut mac = M::new(key);
 
         mac.update(&counter.to_be_bytes());
         mac.update(label);
@@ -196,7 +265,7 @@ where
         // > to the desired size (which causes the loss of some of the most recently
         // > added bits), and the value is returned.
         // TODO: Call `finalize_reset()`?
-        buffer.extend_from_slice(&mac.finalize().into_bytes());
+        buffer.extend_from_slice(mac.finalize().as_ref());
 
         counter += 1;
     }
@@ -212,7 +281,7 @@ pub fn session_key_v2<M>(
     nonce_caller: &Tpm2bNonce,
 ) -> TssResult<Vec<u8>>
 where
-    M: hmac::digest::Mac + hmac::digest::crypto_common::KeyInit,
+    M: AlgoDigestHmac,
 {
     let key = [auth_val, salt].concat();
     let context = [nonce_tpm.get_buffer(), nonce_caller.get_buffer()].concat();
@@ -226,51 +295,50 @@ where
 /// > command authorization HMAC and is included in the digests of session and
 /// > command audits (depending on the policy, the cpHash can also be used in
 /// > the authorization).
-pub fn cp_hash<CmdT: TpmCommand, D: Digest>(
+pub fn cp_hash<CmdT: TpmCommand, H: AlgoDigestHasher>(
     cmd: &CmdT,
     cmd_handles: &CmdT::Handles,
     buf: &mut [u8],
-    mut hasher: D,
-) -> TpmRcResult<GenericArray<u8, <D as OutputSizeUser>::OutputSize>> {
+) -> TpmRcResult<H::Output> {
+    let mut hash = H::new();
+
     let n = CmdT::CMD_CODE.try_marshal(buf)?;
-    hasher.update(&buf[..n]);
+    hash.update(&buf[..n]);
 
     let n = cmd_handles.try_marshal(buf)?;
-    hasher.update(&buf[..n]);
+    hash.update(&buf[..n]);
 
     let n = cmd.try_marshal(buf)?;
-    hasher.update(&buf[..n]);
+    hash.update(&buf[..n]);
 
-    // TODO: Should write directly to `buf`!
-    let hash = hasher.finalize();
-    Ok(hash)
+    Ok(hash.finalize())
 }
 
 /// Spec: 16.8 Response Parameter Hash
 /// > The response parameter hash (rpHash) is used in the computation of a
 /// > response acknowledgment HMAC and is included in the digest of session and
 /// > command audits.
-pub fn rp_hash<CmdT: TpmCommand, D: Digest>(
+pub fn rp_hash<CmdT: TpmCommand, H: AlgoDigestHasher>(
     resp: &CmdT::RespT,
     buf: &mut [u8],
-    mut hasher: D,
-) -> TpmRcResult<GenericArray<u8, <D as OutputSizeUser>::OutputSize>> {
+) -> TpmRcResult<H::Output> {
+    let mut hash = H::new();
+
     // Response code of `TPM_RC_SUCCESS = 0`.
     //
     // > An rpHash needs to be computed only when the responseCode is
     // > TPM_SUCCESS, which means that it is redundant to include the response
     // > code. It is retained for legacy reasons.
     let n = 0u32.try_marshal(buf)?;
-    hasher.update(&buf[..n]);
+    hash.update(&buf[..n]);
 
     let n = CmdT::CMD_CODE.try_marshal(buf)?;
-    hasher.update(&buf[..n]);
+    hash.update(&buf[..n]);
 
     let n = resp.try_marshal(buf)?;
-    hasher.update(&buf[..n]);
+    hash.update(&buf[..n]);
 
-    let hash = hasher.finalize();
-    Ok(hash)
+    Ok(hash.finalize())
 }
 
 /// Spec: 17.6.5 HMAC Computation
@@ -281,17 +349,16 @@ pub fn rp_hash<CmdT: TpmCommand, D: Digest>(
 // TODO:
 // > If sessionKey and End of Example authvalue are both the Empty Buffer,
 // > see Clause 17.6.15.
-pub fn hmac_computation<D, M>(
+pub fn hmac_computation<M>(
     auth_val: &[u8],
     session_key: &[u8],
-    p_hash: &GenericArray<u8, <D as OutputSizeUser>::OutputSize>,
+    p_hash: &[u8],
     nonce_newer: &Tpm2bNonce,
     nonce_older: &Tpm2bNonce,
     session_attributes: &TpmaSession,
 ) -> TpmRcResult<Tpm2bDigest>
 where
-    D: Digest,
-    M: hmac::digest::Mac + hmac::digest::crypto_common::KeyInit,
+    M: AlgoDigestHmac,
 {
     let mut buf = vec![0u8; 1_024];
 
@@ -302,7 +369,7 @@ where
     buf[n0..n0 + n1].copy_from_slice(auth_val);
 
     let key = &buf[..n0 + n1];
-    let mut mac = <M as Mac>::new_from_slice(&key).unwrap();
+    let mut mac = M::new(key);
 
     mac.update(p_hash);
 
@@ -315,12 +382,11 @@ where
     let n = session_attributes.try_marshal(&mut buf)?;
     mac.update(&buf[..n]);
 
-    let hmac = mac.finalize().into_bytes();
-    Tpm2bDigest::from_bytes(&hmac)
+    Tpm2bDigest::from_bytes(&mac.finalize().as_ref())
 }
 
 // A simple Hmac session (TODO: this should probably do some extra work).
-pub struct HmacSession<D, M> {
+pub struct HmacSession<D> {
     // TODO: const size should be standardized?
     buf: [u8; 1_024],
     session_handle: TpmiShAuthSession,
@@ -329,10 +395,10 @@ pub struct HmacSession<D, M> {
     og_nonce_caller: Tpm2bDigest,
     og_nonce_tpm: Tpm2bNonce,
     session_attributes: TpmaSession,
-    _p: std::marker::PhantomData<(D, M)>,
+    _p: std::marker::PhantomData<D>,
 }
 
-impl<D, M> HmacSession<D, M> {
+impl<D> HmacSession<D> {
     pub fn new(
         session_handle: TpmiShAuthSession,
         nonce_caller: Tpm2bNonce,
@@ -352,10 +418,9 @@ impl<D, M> HmacSession<D, M> {
     }
 }
 
-impl<D, M> Session for HmacSession<D, M>
+impl<D> Session for HmacSession<D>
 where
-    D: Digest,
-    M: hmac::digest::Mac + hmac::digest::crypto_common::KeyInit,
+    D: AlgoDigest,
 {
     fn get_auth_command<CmdT: TpmCommand>(
         &mut self,
@@ -372,18 +437,17 @@ where
         let r: [u8; 32] = rand::random();
         self.nonce_caller = Tpm2bDigest::from_bytes(&r).expect("nonce size must be valid");
 
-        let hasher = D::new();
-        let cp_hash = cp_hash::<CmdT, D>(cmd, cmd_handles, &mut self.buf, hasher).unwrap();
+        let cp_hash = cp_hash::<CmdT, D::Hasher>(cmd, cmd_handles, &mut self.buf).unwrap();
 
         let auth_val = &[];
         let session_key =
-            session_key_v2::<M>(auth_val, b"", &self.og_nonce_tpm, &self.og_nonce_caller)
+            session_key_v2::<D::Hmac>(auth_val, b"", &self.og_nonce_tpm, &self.og_nonce_caller)
                 .unwrap();
 
-        let hmac = hmac_computation::<D, M>(
+        let hmac = hmac_computation::<D::Hmac>(
             auth_val,
             &session_key,
-            &cp_hash,
+            cp_hash.as_ref(),
             &self.nonce_caller,
             &self.nonce_tpm,
             &self.session_attributes,
@@ -404,27 +468,29 @@ where
         resp_handles: &CmdT::RespHandles,
         auth: &TpmsAuthResponse,
     ) -> TssResult<()> {
+        // TODO:
+        assert_eq!(D::Hasher::output_size(), D::Hmac::output_size());
+
         // TODO: Do those sizes have to match EXACTLY? Afaik 16bytes minimum,
         // and `output_size()` max.
-        if auth.nonce.get_size() as usize != <D as OutputSizeUser>::output_size()
+        if auth.nonce.get_size() as usize != D::Hasher::output_size()
             || auth.session_attributes != self.session_attributes
-            || auth.hmac.get_size() as usize != <D as OutputSizeUser>::output_size()
+            || auth.hmac.get_size() as usize != D::Hmac::output_size()
         {
             return Err(TssTcsError::BadParameter.into());
         }
 
-        let hasher = D::new();
-        let rp_hash = rp_hash::<CmdT, D>(resp, &mut self.buf, hasher)?;
+        let rp_hash = rp_hash::<CmdT, D::Hasher>(resp, &mut self.buf)?;
 
         let auth_val = &[];
         let session_key =
-            session_key_v2::<M>(auth_val, b"", &self.og_nonce_tpm, &self.og_nonce_caller)
+            session_key_v2::<D::Hmac>(auth_val, b"", &self.og_nonce_tpm, &self.og_nonce_caller)
                 .unwrap();
 
-        let computed_hmac = hmac_computation::<D, M>(
+        let computed_hmac = hmac_computation::<D::Hmac>(
             auth_val,
             &session_key,
-            &rp_hash,
+            rp_hash.as_ref(),
             &auth.nonce,
             &self.nonce_caller,
             &self.session_attributes,
