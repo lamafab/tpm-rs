@@ -223,38 +223,6 @@ where
     Ok(buffer)
 }
 
-// TODO: Clean this up.
-/*
-pub fn session_key(
-    auth_val: &[u8],
-    salt: &[u8],
-    nonce_tpm: &Tpm2bNonce,
-    nonce_caller: &Tpm2bNonce,
-    bits: u32,
-    buf: &mut [u8],
-) -> TpmRcResult<Vec<u8>> {
-    let n0 = auth_val.len();
-    let n1 = salt.len();
-
-    buf[00..n0 + 00].copy_from_slice(auth_val);
-    buf[n0..n0 + n1].copy_from_slice(salt);
-
-    let key = &buf[..n0 + n1];
-    let hmac = Hmac::<Sha256>::new_from_slice(key).unwrap();
-
-    let n0 = nonce_tpm.get_size() as usize;
-    let n1 = nonce_caller.get_size() as usize;
-
-    buf[00..n0 + 00].copy_from_slice(nonce_tpm.get_buffer());
-    buf[n0..n0 + n1].copy_from_slice(nonce_caller.get_buffer());
-
-    let context = &buf[..n0 + n1];
-    let x = kdfa(hmac, b"ATH", context, bits)?;
-
-    Ok(x)
-}
-*/
-
 /// Spec: 16.7 Command Parameter Hash
 /// > The command parameter hash (cpHash) is used in the computation of a
 /// > command authorization HMAC and is included in the digests of session and
@@ -330,15 +298,8 @@ where
     D: Digest,
     M: hmac::digest::Mac + hmac::digest::crypto_common::KeyInit,
 {
-    let n0 = session_key.len();
-    let n1 = auth_val.len();
-
-    // TODO: Size checks!
-    buf[00..n0 + 00].copy_from_slice(session_key);
-    buf[n0..n0 + n1].copy_from_slice(auth_val);
-    let key = &buf[..n0 + n1];
-
-    let mut mac = <M as Mac>::new_from_slice(key).unwrap();
+    let key = [session_key, auth_val].concat();
+    let mut mac = <M as Mac>::new_from_slice(&key).unwrap();
 
     mac.update(p_hash);
 
