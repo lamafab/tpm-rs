@@ -169,18 +169,20 @@ impl Tpm for FileIoTpm {
 }
 
 /// Spec: 9.4.10.2 KDFa()
-fn kdfa<M: Mac + Clone>(
-    //hash_alg: /* hash algorithm */,
-    mac: M,
+fn kdfa<M>(
+    key: &[u8],
     label: &[u8],   // Label
     context: &[u8], // Context
     bits: u32,      // L (length in bits)
-) -> TpmRcResult<Vec<u8>> {
+) -> TpmRcResult<Vec<u8>>
+where
+    M: hmac::digest::Mac + hmac::digest::crypto_common::KeyInit,
+{
     let mut result = Vec::new();
     let mut counter = 1u32;
 
     while result.len() < (bits as usize + 7) / 8 {
-        let mut mac = mac.clone();
+        let mut mac = <M as Mac>::new_from_slice(key).unwrap();
 
         mac.update(&counter.to_be_bytes());
         mac.update(label);
@@ -214,30 +216,35 @@ pub fn session_key_v2<M>(
     buf: &mut [u8],
 ) -> TpmRcResult<Vec<u8>>
 where
-    M: Clone + hmac::digest::Mac + hmac::digest::crypto_common::KeyInit,
+    M: hmac::digest::Mac + hmac::digest::crypto_common::KeyInit,
 {
-    let n0 = auth_val.len();
-    let n1 = salt.len();
+    let mut n = 0;
 
-    buf[00..n0 + 00].copy_from_slice(auth_val);
-    buf[n0..n0 + n1].copy_from_slice(salt);
+    // TODO: error handling (buf size check)!
+    let mut append = |data: &[u8]| {
+        let l = data.len();
+        buf[n..n+l].copy_from_slice(data);
+        n += l;
+    };
 
-    let key = &buf[..n0 + n1];
-    let mac = <M as Mac>::new_from_slice(key).unwrap();
+    append(auth_val);
+    append(salt);
+    append(nonce_tpm.get_buffer());
+    append(nonce_caller.get_buffer());
 
-    let n0 = nonce_tpm.get_size() as usize;
-    let n1 = nonce_caller.get_size() as usize;
+    let n0 = auth_val.len() + salt.len();
+    let n1 = nonce_tpm.get_size() as usize + nonce_caller.get_size() as usize;
 
-    buf[00..n0 + 00].copy_from_slice(nonce_tpm.get_buffer());
-    buf[n0..n0 + n1].copy_from_slice(nonce_caller.get_buffer());
+    let key = &buf[..n0];
+    let context = &buf[n0..n0 + n1];
 
-    let context = &buf[..n0 + n1];
-    let x = kdfa(mac, b"ATH", context, bits)?;
+    let x = kdfa::<M>(key, b"ATH", context, bits)?;
 
     Ok(x)
 }
 
 // TODO: Clean this up.
+/*
 pub fn session_key(
     auth_val: &[u8],
     salt: &[u8],
@@ -266,6 +273,7 @@ pub fn session_key(
 
     Ok(x)
 }
+*/
 
 /// Spec: 16.7 Command Parameter Hash
 /// > The command parameter hash (cpHash) is used in the computation of a
@@ -388,7 +396,7 @@ impl<D, M> HmacSession<D, M> {
 impl<D, M> Session for HmacSession<D, M>
 where
     D: Digest,
-    M: Mac + Clone,
+    M: hmac::digest::Mac + hmac::digest::crypto_common::KeyInit,
 {
     fn get_auth_command<CmdT: TpmCommand>(
         &mut self,
@@ -409,7 +417,7 @@ where
         let cp_hash = cp_hash::<CmdT, D>(cmd, cmd_handles, &mut self.buf, hasher).unwrap();
 
         let auth_value = &[];
-        let session_key = session_key(
+        let session_key = session_key_v2::<M>(
             auth_value,
             b"",
             &self.og_nonce_tpm,
@@ -458,7 +466,7 @@ where
         let rp_hash = rp_hash::<CmdT, D>(resp, &mut self.buf, hasher)?;
 
         let auth_value = &[];
-        let session_key = session_key(
+        let session_key = session_key_v2::<M>(
             auth_value,
             b"",
             &self.og_nonce_tpm,
