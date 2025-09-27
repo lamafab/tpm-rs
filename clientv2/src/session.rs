@@ -76,8 +76,7 @@ where
         let nonce_buf: [u8; 32] = rand::random();
         let nonce_buf = &nonce_buf[..D::Hasher::output_size()];
 
-        self.nonce_caller =
-            Tpm2bDigest::from_bytes(&nonce_buf).expect("nonce size must be valid");
+        self.nonce_caller = Tpm2bDigest::from_bytes(&nonce_buf).expect("nonce size must be valid");
 
         let cp_hash = cp_hash::<CmdT, D::Hasher>(cmd, cmd_handles, &mut self.buf).unwrap();
 

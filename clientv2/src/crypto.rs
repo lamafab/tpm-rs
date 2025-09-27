@@ -3,6 +3,7 @@ use tpm2_rs_base::{commands::TpmCommand, Tpm2bDigest, Tpm2bNonce, Tpm2bSimple, T
 use tpm2_rs_errors::{TpmRcResult, TssResult};
 use tpm2_rs_marshalable::Marshalable;
 
+// TODO: Note that this is simplified.
 /// Spec: 9.4.10.2 KDFa()
 fn kdfa<M>(key: &[u8], label: &[u8], context: &[u8]) -> TssResult<Vec<u8>>
 where
@@ -10,40 +11,22 @@ where
 {
     // TODO: Use array?
     let mut buffer = Vec::with_capacity(M::output_size());
-    let mut counter = 1u32;
+    let counter = 1u32;
+    let bits = M::output_size() as u32 * 8;
 
-    // TODO:
-    // > If bits is not an even multiple of 8, then the returned value occupies
-    // > the least significant bits of the returned octet array,
-    let bits = M::output_size() * 8;
+    let mut mac = M::new(key);
 
-    // > The implied return from this function is a sequence of octets with a
-    // > length equal to (bits + 7) / 8.
-    while buffer.len() < (bits + 7) / 8 {
-        let mut mac = M::new(key);
-
-        mac.update(&counter.to_be_bytes());
-        mac.update(label);
-        if label.is_empty() || label.last().expect("TODO") != &0 {
-            // > is added only if Label is not present or if the last octet of Label
-            // > is not zero.
-            mac.update(&[0x00]);
-        }
-        mac.update(context);
-        mac.update(&(bits as u32).to_be_bytes());
-
-        // > After each iteration, the HMAC digest data is concatenated to the
-        // > previously produced value until the size of the concatenated string is
-        // > at least as large as the requested value. The string is then truncated
-        // > to the desired size (which causes the loss of some of the most recently
-        // > added bits), and the value is returned.
-        // TODO: Call `finalize_reset()`?
-        buffer.extend_from_slice(mac.finalize().as_ref());
-
-        counter += 1;
+    mac.update(&counter.to_be_bytes());
+    mac.update(label);
+    if label.is_empty() || label.last().expect("TODO") != &0 {
+        // > is added only if Label is not present or if the last octet of Label
+        // > is not zero.
+        mac.update(&[0x00]);
     }
+    mac.update(context);
+    mac.update(&bits.to_be_bytes());
+    buffer.extend_from_slice(mac.finalize().as_ref());
 
-    buffer.truncate((bits + 7) / 8);
     Ok(buffer)
 }
 
