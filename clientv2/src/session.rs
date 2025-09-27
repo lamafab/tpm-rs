@@ -198,11 +198,12 @@ impl AlgoDigest for AlgoDigestSha256 {
     type Hasher = AlgoDigestSha256Hasher;
 
     fn new_hmac(key: &[u8]) -> Self::Hmac {
-        todo!()
+        // TODO: Unwrap
+        AlgoDigestSha256Hmac(hmac::Hmac::new_from_slice(key).unwrap())
     }
 
     fn new_hasher() -> Self::Hasher {
-        todo!()
+        AlgoDigestSha256Hasher(sha2::Sha256::new())
     }
 
     fn output_size() -> usize {
@@ -210,29 +211,29 @@ impl AlgoDigest for AlgoDigestSha256 {
     }
 }
 
-pub struct AlgoDigestSha256Hasher;
+pub struct AlgoDigestSha256Hasher(sha2::Sha256);
 
 impl AlgoDigestHasher for AlgoDigestSha256Hasher {
-    type Output = ();
+    type Output = [u8; 32];
 
     fn update(&mut self, data: &[u8]) {
-        todo!()
+        self.0.update(data);
     }
     fn finalize(self) -> Self::Output {
-        todo!()
+        self.0.finalize().into()
     }
 }
 
-pub struct AlgoDigestSha256Hmac;
+pub struct AlgoDigestSha256Hmac(hmac::Hmac<sha2::Sha256>);
 
 impl AlgoDigestHmac for AlgoDigestSha256Hmac {
-    type Output = ();
+    type Output = [u8; 32];
 
     fn update(&mut self, data: &[u8]) {
-        todo!()
+        self.0.update(data);
     }
     fn finalize(self) -> Self::Output {
-        todo!()
+        self.0.finalize().into_bytes().into()
     }
 }
 
