@@ -174,14 +174,14 @@ impl Tpm for FileIoTpm {
 /// > the authorization).
 pub fn cp_hash<CmdT: TpmCommand, D: Digest>(
     cmd: &CmdT,
-    cmd_handle: &CmdT::Handles,
+    cmd_handles: &CmdT::Handles,
     buf: &mut [u8],
     mut hasher: D,
 ) -> TpmRcResult<GenericArray<u8, <D as OutputSizeUser>::OutputSize>> {
     let n = CmdT::CMD_CODE.try_marshal(buf)?;
     hasher.update(&buf[..n]);
 
-    let n = cmd_handle.try_marshal(buf)?;
+    let n = cmd_handles.try_marshal(buf)?;
     hasher.update(&buf[..n]);
 
     let n = cmd.try_marshal(buf)?;
@@ -196,7 +196,7 @@ pub fn cp_hash<CmdT: TpmCommand, D: Digest>(
 /// > response acknowledgment HMAC and is included in the digest of session and
 /// > command audits.
 pub fn rp_hash<CmdT: TpmCommand, D: Digest>(
-    resp: CmdT::RespT,
+    resp: &CmdT::RespT,
     buf: &mut [u8],
     mut hasher: D,
 ) -> TpmRcResult<GenericArray<u8, <D as OutputSizeUser>::OutputSize>> {
@@ -229,7 +229,7 @@ pub fn rp_hash<CmdT: TpmCommand, D: Digest>(
 pub fn hmac_computation<M: Mac>(
     p_hash: &GenericArray<u8, <M as OutputSizeUser>::OutputSize>,
     nonce_newer: &Tpm2bDigest,
-    nonce_older: Tpm2bDigest,
+    nonce_older: &Tpm2bDigest,
     session_attributes: &TpmaSession,
     buf: &mut [u8],
     mut mac: M,
@@ -273,6 +273,7 @@ impl HmacSession {
             session_attributes,
         }
     }
+    /*
     fn _compute_hmac<CmdT: TpmCommand>(
         buf: &mut [u8],
         cmd: &CmdT,
@@ -315,6 +316,7 @@ impl HmacSession {
         let hmac = mac.finalize().into_bytes();
         Tpm2bDigest::from_bytes(&hmac).unwrap()
     }
+    */
 }
 
 impl Session for HmacSession {
@@ -333,14 +335,19 @@ impl Session for HmacSession {
         let r: [u8; 32] = rand::random();
         self.nonce_caller = Tpm2bDigest::from_bytes(&r).expect("nonce size must be valid");
 
-        let hmac = Self::_compute_hmac(
-            &mut self.buf,
-            cmd,
-            cmd_handles,
+        let hasher = Sha256::new();
+        let cp_hash = cp_hash(cmd, cmd_handles, &mut self.buf, hasher).unwrap();
+
+        let mac = Hmac::<Sha256>::new_from_slice(&[]).unwrap();
+        let hmac = hmac_computation(
+            &cp_hash,
             &self.nonce_caller,
             &self.nonce_tpm,
             &self.session_attributes,
-        );
+            &mut self.buf,
+            mac,
+        )
+        .unwrap();
 
         TpmsAuthCommand {
             session_handle: self.session_handle,
@@ -356,19 +363,25 @@ impl Session for HmacSession {
         resp_handles: &CmdT::RespHandles,
         auth: &TpmsAuthResponse,
     ) -> TssResult<()> {
-        todo!()
-        /*
-        let computed_hmac = Self::_compute_hmac(
-            &mut self.buf,
-            cmd,
-            resp_handles,
+        if auth.nonce.get_size() != 32
+            || auth.session_attributes != self.session_attributes
+            || auth.hmac.get_size() != 32
+        {
+            return Err(TssTcsError::BadParameter.into());
+        }
+
+        let hasher = Sha256::new();
+        let rp_hash = rp_hash::<CmdT, _>(resp, &mut self.buf, hasher)?;
+
+        let mac = Hmac::<Sha256>::new_from_slice(&[]).unwrap();
+        let computed_hmac = hmac_computation(
+            &rp_hash,
             &auth.nonce,
             &self.nonce_caller,
             &self.session_attributes,
-        );
-
-        dbg!(&computed_hmac);
-        dbg!(&auth.hmac);
+            &mut self.buf,
+            mac,
+        )?;
 
         // TODO: Make this nicer.
         let computed_hmac = Tpm2bData::from_bytes(&computed_hmac.get_buffer()[..32]).unwrap();
@@ -382,16 +395,6 @@ impl Session for HmacSession {
         self.nonce_tpm = auth.nonce;
 
         Ok(())
-
-        if auth.nonce.get_size() != 32
-            || auth.session_attributes != self.session_attributes
-            || auth.hmac.get_size() != 32
-        {
-            return Err(TssTcsError::BadParameter.into());
-        }
-
-        Ok(())
-        */
 
         /* TODO: From Part1:
         17.6.3 Session Nonces
