@@ -115,7 +115,7 @@ pub fn run_command_with_handles<
 >(
     cmd: &CmdT,
     cmd_handles: &CmdT::Handles,
-    cmd_sessions: Option<&mut AA>,
+    cmd_sessions: &mut Option<AA>,
     tpm: &mut T,
 ) -> TssResult<(CmdT::RespT, CmdT::RespHandles)>
 where
@@ -150,8 +150,9 @@ where
         let _param_size = u32::try_unmarshal(&mut unmarsh)?;
     }
     let resp = CmdT::RespT::try_unmarshal(&mut unmarsh)?;
-    // TODO
-    //read_response_sessions(&cmd_sessions, &mut unmarsh)?;
+    if let Some(sessions) = cmd_sessions {
+        sessions.read_response_data(cmd, &resp, &mut unmarsh)?;
+    }
 
     if !unmarsh.is_empty() {
         return TssResult::Err(TssTcsError::TpmUnexpected.into());
