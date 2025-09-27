@@ -167,8 +167,8 @@ impl Tpm for FileIoTpm {
 }
 
 trait AlgoDigest {
-    type Hmac: AlgoDigestHmac;
     type Hasher: AlgoDigestHasher;
+    type Hmac: AlgoDigestHmac;
 }
 
 trait AlgoDigestHasher {
