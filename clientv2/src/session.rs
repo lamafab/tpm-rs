@@ -173,6 +173,48 @@ impl Tpm for FileIoTpm {
     }
 }
 
+/// Spec: 9.4.10.2 KDFa()
+fn kdfa<M: Mac + Clone>(
+    //hash_alg: /* hash algorithm */,
+    key: &[u8],     // KIN
+    label: &[u8],   // Label
+    context: &[u8], // Context
+    bits: u32,      // L (length in bits)
+    mac: M,
+) -> Vec<u8> {
+    let mut result = Vec::new();
+    let mut counter = 1u32;
+
+    while result.len() < (bits as usize + 7) / 8 {
+        let mut mac = mac.clone();
+
+        mac.update(&counter.to_be_bytes());
+        mac.update(label);
+        if label.is_empty() || label.last().expect("TODO") != &0 {
+            // > is added only if Label is not present or if the last octet of Label
+            // > is not zero.
+            mac.update(&[0x00]);
+        }
+        mac.update(context);
+        mac.update(&bits.to_be_bytes());
+
+        // > After each iteration, the HMAC digest data is concatenated to the
+        // > previously produced value until the size of the concatenated string is
+        // > at least as large as the requested value. The string is then truncated
+        // > to the desired size (which causes the loss of some of the most recently
+        // > added bits), and the value is returned.
+        result.extend_from_slice(&mac.finalize().into_bytes());
+        counter += 1;
+    }
+
+    result.truncate((bits as usize + 7) / 8);
+    result
+}
+
+pub fn session_key() -> TpmRcResult<()> {
+    todo!()
+}
+
 /// Spec: 16.7 Command Parameter Hash
 /// > The command parameter hash (cpHash) is used in the computation of a
 /// > command authorization HMAC and is included in the digests of session and
