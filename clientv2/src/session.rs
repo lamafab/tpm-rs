@@ -115,10 +115,8 @@ pub fn test_start_auth_create_primary() {
     let (resp, handle) =
         run_command_with_handles(&cmd, &cmd_handle, &mut session, &mut tpm).unwrap();
 
-    /*
     let (resp, handle) =
         run_command_with_handles(&cmd, &cmd_handle, &mut session, &mut tpm).unwrap();
-    */
 }
 
 // A simple file Io protocol.
@@ -169,11 +167,7 @@ impl Tpm for FileIoTpm {
 }
 
 /// Spec: 9.4.10.2 KDFa()
-fn kdfa<D, M>(
-    key: &[u8],
-    label: &[u8],
-    context: &[u8],
-) -> TssResult<Vec<u8>>
+fn kdfa<D, M>(key: &[u8], label: &[u8], context: &[u8]) -> TssResult<Vec<u8>>
 where
     D: Digest,
     M: hmac::digest::Mac + hmac::digest::crypto_common::KeyInit,
@@ -182,7 +176,6 @@ where
     let mut counter = 1u32;
 
     let bits = <D as Digest>::output_size() * 8;
-    dbg!(bits);
 
     // TODO: This is kind of weird.
     while buffer.len() < (bits + 7) / 8 {
@@ -323,15 +316,30 @@ pub fn rp_hash<CmdT: TpmCommand, D: Digest>(
 // TODO:
 // > If sessionKey and End of Example authvalue are both the Empty Buffer,
 // > see Clause 17.6.15.
-pub fn hmac_computation<D: Digest, M: Mac>(
+pub fn hmac_computation<D, M>(
+    auth_val: &[u8],
+    session_key: &[u8],
     p_hash: &GenericArray<u8, <D as OutputSizeUser>::OutputSize>,
     // TODO: Should be `Tpm2bNonce`?
     nonce_newer: &Tpm2bDigest,
     nonce_older: &Tpm2bDigest,
     session_attributes: &TpmaSession,
     buf: &mut [u8],
-    mut mac: M,
-) -> TpmRcResult<Tpm2bDigest> {
+) -> TpmRcResult<Tpm2bDigest>
+where
+    D: Digest,
+    M: hmac::digest::Mac + hmac::digest::crypto_common::KeyInit,
+{
+    let n0 = session_key.len();
+    let n1 = auth_val.len();
+
+    // TODO: Size checks!
+    buf[00..n0 + 00].copy_from_slice(session_key);
+    buf[n0..n0 + n1].copy_from_slice(auth_val);
+    let key = &buf[..n0 + n1];
+
+    let mut mac = <M as Mac>::new_from_slice(key).unwrap();
+
     mac.update(p_hash);
 
     let n = nonce_newer.try_marshal(buf)?;
@@ -404,24 +412,18 @@ where
         let cp_hash = cp_hash::<CmdT, D>(cmd, cmd_handles, &mut self.buf, hasher).unwrap();
 
         let auth_val = &[];
-        let session_key = session_key_v2::<D, M>(
+        let session_key =
+            session_key_v2::<D, M>(auth_val, b"", &self.og_nonce_tpm, &self.og_nonce_caller)
+                .unwrap();
+
+        let hmac = hmac_computation::<D, M>(
             auth_val,
-            b"",
-            &self.og_nonce_tpm,
-            &self.og_nonce_caller,
-        )
-        .unwrap();
-
-        let key = [session_key.as_slice(), auth_val].concat();
-        let mac = <M as Mac>::new_from_slice(&key).unwrap();
-
-        let hmac = hmac_computation::<D, _>(
+            &session_key,
             &cp_hash,
             &self.nonce_caller,
             &self.nonce_tpm,
             &self.session_attributes,
             &mut self.buf,
-            mac,
         )
         .unwrap();
 
@@ -452,25 +454,20 @@ where
         let rp_hash = rp_hash::<CmdT, D>(resp, &mut self.buf, hasher)?;
 
         let auth_val = &[];
-        let session_key = session_key_v2::<D, M>(
+        let session_key =
+            session_key_v2::<D, M>(auth_val, b"", &self.og_nonce_tpm, &self.og_nonce_caller)
+                .unwrap();
+
+        let computed_hmac = hmac_computation::<D, M>(
             auth_val,
-            b"",
-            &self.og_nonce_tpm,
-            &self.og_nonce_caller,
-        )
-        .unwrap();
-
-        let key = [session_key.as_slice(), auth_val].concat();
-        let mac = <M as Mac>::new_from_slice(&key).unwrap();
-
-        let computed_hmac = hmac_computation::<D, _>(
+            &session_key,
             &rp_hash,
             &auth.nonce,
             &self.nonce_caller,
             &self.session_attributes,
             &mut self.buf,
-            mac,
-        )?;
+        )
+        .unwrap();
 
         // TODO: Make this nicer.
         let computed_hmac = Tpm2bData::from_bytes(&computed_hmac.get_buffer()[..32]).unwrap();
