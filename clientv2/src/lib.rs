@@ -85,8 +85,7 @@ pub fn read_response_header(buffer: &[u8]) -> TssResult<(RespHeader, usize)> {
 pub fn run_command_with_handles<CmdT, TpmT, AA: AuthorizationArea>(
     cmd: &CmdT,
     cmd_handles: &CmdT::Handles,
-    // TODO: Maybe use `()` for no session?
-    mut cmd_sessions: Option<&mut AA>,
+    cmd_sessions: &mut AA,
     tpm: &mut TpmT,
 ) -> TssResult<(CmdT::RespT, CmdT::RespHandles)>
 where
@@ -94,13 +93,11 @@ where
     TpmT: Tpm,
 {
     let mut cmd_buffer = [0u8; CMD_BUFFER_SIZE];
-    let mut cmd_header = CmdHeader::new(cmd_sessions.is_some(), CmdT::CMD_CODE);
+    let mut cmd_header = CmdHeader::new(cmd_sessions.has_sessions(), CmdT::CMD_CODE);
     let mut written = cmd_header.try_marshal(&mut cmd_buffer)?;
 
     written += cmd_handles.try_marshal(&mut cmd_buffer[written..])?;
-    if let Some(sessions) = cmd_sessions.as_mut() {
-        written += sessions.write_session_data(cmd, cmd_handles, &mut cmd_buffer[written..])?;
-    }
+    written += cmd_sessions.write_session_data(cmd, cmd_handles, &mut cmd_buffer[written..])?;
     written += cmd.try_marshal(&mut cmd_buffer[written..])?;
 
     // Update the command size
@@ -121,9 +118,7 @@ where
         let _param_size = u32::try_unmarshal(&mut unmarsh)?;
     }
     let resp = CmdT::RespT::try_unmarshal(&mut unmarsh)?;
-    if let Some(sessions) = cmd_sessions.as_mut() {
-        sessions.read_response_data(cmd, &resp, &mut unmarsh)?;
-    }
+    cmd_sessions.read_response_data(cmd, &resp, &mut unmarsh)?;
 
     if !unmarsh.is_empty() {
         return TssResult::Err(TssTcsError::TpmUnexpected.into());
@@ -133,6 +128,7 @@ where
 
 // TODO: Define CmdT at top level?
 pub trait AuthorizationArea {
+    fn has_sessions(&self) -> bool;
     fn write_session_data<CmdT: TpmCommand>(
         &mut self,
         cmd: &CmdT,
@@ -147,7 +143,32 @@ pub trait AuthorizationArea {
     ) -> TssResult<()>;
 }
 
+impl AuthorizationArea for () {
+    fn has_sessions(&self) -> bool {
+        false
+    }
+    fn write_session_data<CmdT: TpmCommand>(
+        &mut self,
+        _cmd: &CmdT,
+        _handles: &CmdT::Handles,
+        _buf: &mut [u8],
+    ) -> TssResult<usize> {
+        Ok(0)
+    }
+    fn read_response_data<CmdT: TpmCommand>(
+        &mut self,
+        _cmd: &CmdT,
+        _resp: &CmdT::RespT,
+        _buf: &mut UnmarshalBuf,
+    ) -> TssResult<()> {
+        Ok(())
+    }
+}
+
 impl<T: Session> AuthorizationArea for T {
+    fn has_sessions(&self) -> bool {
+        true
+    }
     fn write_session_data<CmdT: TpmCommand>(
         &mut self,
         cmd: &CmdT,
@@ -181,7 +202,10 @@ impl<T: Session> AuthorizationArea for T {
     }
 }
 
-impl<T: Session> AuthorizationArea for [T; 2] {
+impl<T: Session> AuthorizationArea for [&mut T; 2] {
+    fn has_sessions(&self) -> bool {
+        todo!()
+    }
     fn write_session_data<CmdT: TpmCommand>(
         &mut self,
         cmd: &CmdT,
@@ -204,7 +228,10 @@ impl<T: Session> AuthorizationArea for [T; 2] {
     }
 }
 
-impl<T: Session> AuthorizationArea for [T; 3] {
+impl<T: Session> AuthorizationArea for [&mut T; 3] {
+    fn has_sessions(&self) -> bool {
+        todo!()
+    }
     fn write_session_data<CmdT: TpmCommand>(
         &mut self,
         cmd: &CmdT,
