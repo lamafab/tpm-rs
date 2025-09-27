@@ -6,6 +6,8 @@ use tpm2_rs_base::{
 };
 use tpm2_rs_marshalable::{Marshalable, UnmarshalBuf};
 
+pub mod session;
+
 pub const CMD_BUFFER_SIZE: usize = 4096;
 pub const RESP_BUFFER_SIZE: usize = 4096;
 
@@ -78,31 +80,6 @@ pub fn read_response_header(buffer: &[u8]) -> TssResult<(RespHeader, usize)> {
     }
     Ok((resp_header, buffer.len() - unmarsh.len()))
 }
-
-/*
-/// Unmarshals any response sessions.
-pub fn read_response_sessions<
-    X: Session,
-    Y: Session,
-    Z: Session,
-    AA: AuthorizationArea<X, Y, Z>,
->(
-    sessions: &AA,
-    buffer: &mut UnmarshalBuf,
-) -> TssResult<()> {
-    let (s1, s2, s3) = sessions.decompose_ref();
-    let Some(s1) = s1 else { return Ok(()) };
-    let auth = TpmsAuthResponse::try_unmarshal(buffer)?;
-    s1.validate_auth_response(&auth)?;
-    let Some(s2) = s2 else { return Ok(()) };
-    let auth = TpmsAuthResponse::try_unmarshal(buffer)?;
-    s2.validate_auth_response(&auth)?;
-    let Some(s3) = s3 else { return Ok(()) };
-    let auth = TpmsAuthResponse::try_unmarshal(buffer)?;
-    s3.validate_auth_response(&auth)?;
-    Ok(())
-}
-*/
 
 /// Runs a command with provided handles and sessions.
 pub fn run_command_with_handles<
