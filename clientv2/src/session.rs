@@ -167,55 +167,46 @@ impl Tpm for FileIoTpm {
 }
 
 trait AlgoDigest {
-    type Output: AsRef<[u8]>;
     type Hmac: AlgoDigestHmac;
     type Hasher: AlgoDigestHasher;
-
-    fn new_hmac(key: &[u8]) -> Self::Hmac;
-    fn new_hasher() -> Self::Hasher;
-    fn output_size() -> usize;
 }
 
 trait AlgoDigestHasher {
     type Output;
 
+    fn new() -> Self;
+    fn output_size() -> usize;
     fn update(&mut self, data: &[u8]);
     fn finalize(self) -> Self::Output;
 }
 
 trait AlgoDigestHmac {
-    type Output;
+    type Output: AsRef<[u8]>;
 
+    fn new(key: &[u8]) -> Self;
+    fn output_size() -> usize;
     fn update(&mut self, data: &[u8]);
     fn finalize(self) -> Self::Output;
 }
 
-pub struct AlgoDigestSha256;
+pub struct AlgoSha256;
 
-impl AlgoDigest for AlgoDigestSha256 {
-    type Output = [u8; 32];
-    type Hmac = AlgoDigestSha256Hmac;
-    type Hasher = AlgoDigestSha256Hasher;
-
-    fn new_hmac(key: &[u8]) -> Self::Hmac {
-        // TODO: Unwrap
-        AlgoDigestSha256Hmac(hmac::Hmac::new_from_slice(key).unwrap())
-    }
-
-    fn new_hasher() -> Self::Hasher {
-        AlgoDigestSha256Hasher(sha2::Sha256::new())
-    }
-
-    fn output_size() -> usize {
-        todo!()
-    }
+impl AlgoDigest for AlgoSha256 {
+    type Hmac = AlgoSha256Hmac;
+    type Hasher = AlgoSha256Hasher;
 }
 
-pub struct AlgoDigestSha256Hasher(sha2::Sha256);
+pub struct AlgoSha256Hasher(sha2::Sha256);
 
-impl AlgoDigestHasher for AlgoDigestSha256Hasher {
+impl AlgoDigestHasher for AlgoSha256Hasher {
     type Output = [u8; 32];
 
+    fn new() -> Self {
+        AlgoSha256Hasher(sha2::Sha256::new())
+    }
+    fn output_size() -> usize {
+        32
+    }
     fn update(&mut self, data: &[u8]) {
         self.0.update(data);
     }
@@ -224,11 +215,18 @@ impl AlgoDigestHasher for AlgoDigestSha256Hasher {
     }
 }
 
-pub struct AlgoDigestSha256Hmac(hmac::Hmac<sha2::Sha256>);
+pub struct AlgoSha256Hmac(hmac::Hmac<sha2::Sha256>);
 
-impl AlgoDigestHmac for AlgoDigestSha256Hmac {
+impl AlgoDigestHmac for AlgoSha256Hmac {
     type Output = [u8; 32];
 
+    fn new(key: &[u8]) -> Self {
+        // TODO: Unwrap
+        AlgoSha256Hmac(hmac::Hmac::new_from_slice(key).unwrap())
+    }
+    fn output_size() -> usize {
+        32
+    }
     fn update(&mut self, data: &[u8]) {
         self.0.update(data);
     }
