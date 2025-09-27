@@ -166,12 +166,12 @@ impl Tpm for FileIoTpm {
     }
 }
 
-trait AlgoDigest {
+pub trait AlgoDigest {
     type Hasher: AlgoDigestHasher;
     type Hmac: AlgoDigestHmac;
 }
 
-trait AlgoDigestHasher {
+pub trait AlgoDigestHasher {
     type Output: AsRef<[u8]>;
 
     fn new() -> Self;
@@ -180,7 +180,7 @@ trait AlgoDigestHasher {
     fn finalize(self) -> Self::Output;
 }
 
-trait AlgoDigestHmac {
+pub trait AlgoDigestHmac {
     type Output: AsRef<[u8]>;
 
     fn new(key: &[u8]) -> Self;
@@ -300,18 +300,18 @@ pub fn cp_hash<CmdT: TpmCommand, H: AlgoDigestHasher>(
     cmd_handles: &CmdT::Handles,
     buf: &mut [u8],
 ) -> TpmRcResult<H::Output> {
-    let mut h = H::new();
+    let mut hash = H::new();
 
     let n = CmdT::CMD_CODE.try_marshal(buf)?;
-    h.update(&buf[..n]);
+    hash.update(&buf[..n]);
 
     let n = cmd_handles.try_marshal(buf)?;
-    h.update(&buf[..n]);
+    hash.update(&buf[..n]);
 
     let n = cmd.try_marshal(buf)?;
-    h.update(&buf[..n]);
+    hash.update(&buf[..n]);
 
-    Ok(h.finalize())
+    Ok(hash.finalize())
 }
 
 /// Spec: 16.8 Response Parameter Hash
@@ -322,7 +322,7 @@ pub fn rp_hash<CmdT: TpmCommand, H: AlgoDigestHasher>(
     resp: &CmdT::RespT,
     buf: &mut [u8],
 ) -> TpmRcResult<H::Output> {
-    let mut h = H::new();
+    let mut hash = H::new();
 
     // Response code of `TPM_RC_SUCCESS = 0`.
     //
@@ -330,15 +330,15 @@ pub fn rp_hash<CmdT: TpmCommand, H: AlgoDigestHasher>(
     // > TPM_SUCCESS, which means that it is redundant to include the response
     // > code. It is retained for legacy reasons.
     let n = 0u32.try_marshal(buf)?;
-    h.update(&buf[..n]);
+    hash.update(&buf[..n]);
 
     let n = CmdT::CMD_CODE.try_marshal(buf)?;
-    h.update(&buf[..n]);
+    hash.update(&buf[..n]);
 
     let n = resp.try_marshal(buf)?;
-    h.update(&buf[..n]);
+    hash.update(&buf[..n]);
 
-    Ok(h.finalize())
+    Ok(hash.finalize())
 }
 
 /// Spec: 17.6.5 HMAC Computation
