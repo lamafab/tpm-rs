@@ -1,6 +1,6 @@
 use crate::{
     algo::{AlgoDigest, AlgoDigestHasher, AlgoDigestHmac},
-    crypto::{cp_hash, hmac_computation, rp_hash, session_key_v2},
+    crypto::{cp_hash, hmac_computation, rp_hash, session_key},
 };
 use tpm2_rs_base::{
     commands::TpmCommand, Tpm2bData, Tpm2bDigest, Tpm2bNonce, Tpm2bSimple, TpmaSession,
@@ -62,26 +62,28 @@ impl<D> Session for HmacSession<D>
 where
     D: AlgoDigest,
 {
+    /// Spec (Part 1): 17.6.3.1 Overview
     fn get_auth_command<CmdT: TpmCommand>(
         &mut self,
         cmd: &CmdT,
         cmd_handles: &CmdT::Handles,
     ) -> TpmsAuthCommand {
-        // TODO:
         // > The minimum size for nonceCaller in TPM2_StartAuthSession() is 16
-        // octets.
-        // > The maximum size that may be requested for nonceTPM is the size of
-        // the digest produced by the authorization session hash. Example: For
-        // SHA-1, the maximum size for nonceTPM is 20 octets and for SHA256 it
-        // is 32 octets.
-        let r: [u8; 32] = rand::random();
-        self.nonce_caller = Tpm2bDigest::from_bytes(&r).expect("nonce size must be valid");
+        // > octets. The maximum size that may be requested for nonceTPM is the
+        // > size of the digest produced by the authorization session hash.
+        // > Example: For SHA-1, the maximum size for nonceTPM is 20 octets and
+        // > for SHA256 it is 32 octets.
+        let nonce_buf: [u8; 32] = rand::random();
+        let nonce_buf = &nonce_buf[..D::Hasher::output_size()];
+
+        self.nonce_caller =
+            Tpm2bDigest::from_bytes(&nonce_buf).expect("nonce size must be valid");
 
         let cp_hash = cp_hash::<CmdT, D::Hasher>(cmd, cmd_handles, &mut self.buf).unwrap();
 
         let auth_val = &[];
         let session_key =
-            session_key_v2::<D::Hmac>(auth_val, b"", &self.og_nonce_tpm, &self.og_nonce_caller)
+            session_key::<D::Hmac>(auth_val, b"", &self.og_nonce_tpm, &self.og_nonce_caller)
                 .unwrap();
 
         let hmac = hmac_computation::<D::Hmac>(
@@ -101,6 +103,7 @@ where
             hmac,
         }
     }
+    /// Spec (Part 1): 16.8 Response Parameter Hash
     fn validate_auth_response<CmdT: TpmCommand>(
         &mut self,
         resp: &CmdT::RespT,
@@ -124,7 +127,7 @@ where
 
         let auth_val = &[];
         let session_key =
-            session_key_v2::<D::Hmac>(auth_val, b"", &self.og_nonce_tpm, &self.og_nonce_caller)
+            session_key::<D::Hmac>(auth_val, b"", &self.og_nonce_tpm, &self.og_nonce_caller)
                 .unwrap();
 
         let computed_hmac = hmac_computation::<D::Hmac>(
@@ -150,39 +153,5 @@ where
         self.nonce_tpm = auth.nonce;
 
         Ok(())
-
-        /* TODO: From Part1:
-        17.6.3 Session Nonces
-        17.6.3.1 Overview
-        The primary use of a nonce in a session is to prevent an authorization from being reused. When the session
-        is started by TPM2_StartAuthSession(), the caller indicates, among other things, the size of the nonces
-        to be used in the authorization HMAC and an initial nonce value (nonceCaller). After establishing the session,
-        the TPM returns a handle to identify the session and a TPM-generated random nonce (nonceTPM). The TPM
-        stores this nonceTPM in the context of the session.
-        Each time the session is used for authorization, the caller performs an HMAC using, along with other
-        parameters, the last nonceTPM for the session and a new nonceCaller for the session. The TPM then uses the
-        received nonceCaller and the saved nonceTPM to validate the HMAC. For a response, the TPM uses the last
-        nonceCaller and a newly generated nonceTPM in the HMAC. The caller then uses the received nonceTPM and
-        the saved nonceCaller to validate the HMAC in the response.
-        A nonce has a size field indicating the number of octets in the nonce followed by the nonce data. The nonce
-        size is not included in the HMAC computation.
-
-
-        16.8 Response Parameter Hash
-        The response parameter hash (rpHash) is used in the computation of a response acknowledgment HMAC and
-        is included in the digest of session and command audits. The rpHash is computed from the parameters of the
-        response as follows:
-        rpHash ∶= HsessionAlg (responseCode ∥ commandCode {∥ parameters })
-        (16)
-        where
-        HsessionAlgis the hash function using the algorithm selected
-        for the session when it was initialized
-        responseCodeis the command result code
-        commandCodeis the commandCode from the command
-        parametersis the response parameters
-        The contents of the handles area of the response are not included in the rpHash.
-        An rpHash needs to be computed only when the responseCode is TPM_SUCCESS, which means that it is
-        redundant to include the response code. It is retained for legacy reasons.
-                */
     }
 }

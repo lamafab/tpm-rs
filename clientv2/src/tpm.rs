@@ -1,6 +1,14 @@
-use std::{fs::OpenOptions, io::{Read, Write}, path::Path};
+use std::{
+    fs::OpenOptions,
+    io::{Read, Write},
+    path::Path,
+};
 
-use tpm2_rs_base::{commands::TpmCommand, constants::{TpmCc, TpmSt}, TpmiStCommandTag};
+use tpm2_rs_base::{
+    commands::TpmCommand,
+    constants::{TpmCc, TpmSt},
+    TpmiStCommandTag,
+};
 use tpm2_rs_errors::{TssError, TssResult, TssTcsError};
 use tpm2_rs_marshalable::{Marshalable, UnmarshalBuf};
 

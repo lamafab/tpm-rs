@@ -1,5 +1,5 @@
-use sha2::Digest;
 use hmac::Mac;
+use sha2::Digest;
 
 pub trait AlgoDigest {
     type Hasher: AlgoDigestHasher;

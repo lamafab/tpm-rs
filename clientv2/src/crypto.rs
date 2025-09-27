@@ -47,7 +47,7 @@ where
     Ok(buffer)
 }
 
-pub fn session_key_v2<M>(
+pub fn session_key<M>(
     auth_val: &[u8],
     salt: &[u8],
     nonce_tpm: &Tpm2bNonce,
