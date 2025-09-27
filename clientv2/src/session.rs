@@ -217,17 +217,26 @@ pub fn session_key(
     nonce_tpm: &Tpm2bNonce,
     nonce_caller: &Tpm2bNonce,
     bits: u32,
+    buf: &mut [u8],
 ) -> TpmRcResult<Vec<u8>> {
-    let key = [auth_val, salt].concat();
-    let hmac = Hmac::<Sha256>::new_from_slice(&key).unwrap();
+    let n0 = auth_val.len();
+    let n1 = salt.len();
 
-    let mut buf = [0u8; 1_024];
-    let n0 = nonce_tpm.try_marshal(&mut buf)?;
-    let n1 = nonce_caller.try_marshal(&mut buf[n0..])?;
+    buf[00..n0+00].copy_from_slice(auth_val);
+    buf[n0..n0+n1].copy_from_slice(salt);
 
-    let context = [&buf[2..n0], &buf[n0 + 2..n0+n1]].concat();
+    let key = &buf[..n0+n1];
+    let hmac = Hmac::<Sha256>::new_from_slice(key).unwrap();
 
-    let x = kdfa(hmac, b"ATH", &context, bits)?;
+    let n0 = nonce_tpm.get_size() as usize;
+    let n1 = nonce_caller.get_size() as usize;
+
+    buf[00..n0+00].copy_from_slice(nonce_tpm.get_buffer());
+    buf[n0..n0+n1].copy_from_slice(nonce_caller.get_buffer());
+
+    let context = &buf[..n0+n1];
+    let x = kdfa(hmac, b"ATH", context, bits)?;
+
     Ok(x)
 }
 
@@ -379,6 +388,7 @@ where
             &self.og_nonce_tpm,
             &self.og_nonce_caller,
             256,
+            &mut self.buf,
         ).unwrap();
         let key = [session_key.as_slice(), auth_value].concat();
         let mac = Hmac::<Sha256>::new_from_slice(&key).unwrap();
@@ -426,6 +436,7 @@ where
             &self.og_nonce_tpm,
             &self.og_nonce_caller,
             256,
+            &mut self.buf,
         ).unwrap();
         let key = [session_key.as_slice(), auth_value].concat();
         let mac = Hmac::<Sha256>::new_from_slice(&key).unwrap();
