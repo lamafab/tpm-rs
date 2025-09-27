@@ -176,12 +176,11 @@ impl Tpm for FileIoTpm {
 /// Spec: 9.4.10.2 KDFa()
 fn kdfa<M: Mac + Clone>(
     //hash_alg: /* hash algorithm */,
-    key: &[u8],     // KIN
+    mac: M,
     label: &[u8],   // Label
     context: &[u8], // Context
     bits: u32,      // L (length in bits)
-    mac: M,
-) -> Vec<u8> {
+) -> TpmRcResult<Vec<u8>> {
     let mut result = Vec::new();
     let mut counter = 1u32;
 
@@ -208,11 +207,28 @@ fn kdfa<M: Mac + Clone>(
     }
 
     result.truncate((bits as usize + 7) / 8);
-    result
+    Ok(result)
 }
 
-pub fn session_key() -> TpmRcResult<()> {
-    todo!()
+// TODO: Clean this up.
+pub fn session_key(
+    auth_val: &[u8],
+    salt: &[u8],
+    nonce_newer: &Tpm2bNonce,
+    nonce_older: &Tpm2bNonce,
+    bits: u32,
+) -> TpmRcResult<Vec<u8>> {
+    let key = [auth_val, salt].concat();
+    let hmac = Hmac::<Sha256>::new_from_slice(&key).unwrap();
+
+    let mut buf = [0u8; 1_024];
+    let n0 = nonce_newer.try_marshal(&mut buf)?;
+    let n1 = nonce_older.try_marshal(&mut buf[n0..])?;
+
+    let context = [&buf[2..n0], &buf[n0+2..n1]].concat();
+
+    let x = kdfa(hmac, b"ATH", &context, bits)?;
+    Ok(x)
 }
 
 /// Spec: 16.7 Command Parameter Hash
@@ -235,6 +251,7 @@ pub fn cp_hash<CmdT: TpmCommand, D: Digest>(
     let n = cmd.try_marshal(buf)?;
     hasher.update(&buf[..n]);
 
+    // TODO: Should write directly to `buf`!
     let hash = hasher.finalize();
     Ok(hash)
 }
@@ -262,6 +279,7 @@ pub fn rp_hash<CmdT: TpmCommand, D: Digest>(
     let n = resp.try_marshal(buf)?;
     hasher.update(&buf[..n]);
 
+    // TODO: Should write directly to `buf`!
     let hash = hasher.finalize();
     Ok(hash)
 }
@@ -276,6 +294,7 @@ pub fn rp_hash<CmdT: TpmCommand, D: Digest>(
 // > see Clause 17.6.15.
 pub fn hmac_computation<D: Digest, M: Mac>(
     p_hash: &GenericArray<u8, <D as OutputSizeUser>::OutputSize>,
+    // TODO: Should be `Tpm2bNonce`?
     nonce_newer: &Tpm2bDigest,
     nonce_older: &Tpm2bDigest,
     session_attributes: &TpmaSession,
