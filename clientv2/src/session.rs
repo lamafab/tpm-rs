@@ -1,5 +1,10 @@
 use hmac::{
-    digest::{generic_array::GenericArray, OutputSizeUser},
+    digest::{
+        core_api::{BlockSizeUser, CoreProxy},
+        crypto_common::KeySizeUser,
+        generic_array::GenericArray,
+        OutputSizeUser,
+    },
     Hmac, Mac,
 };
 use sha2::{Digest, Sha256};
@@ -103,10 +108,13 @@ pub fn test_start_auth_create_primary() {
         creation_pcr,
     };
 
-    let mut session = HmacSession::<Sha256>::new(
+    let hmac = Hmac::new_from_slice(&[]).unwrap();
+
+    let mut session = HmacSession::<Sha256, Hmac<Sha256>>::new(
         session_handle,
         resp.nonce_tpm,
         TpmaSession::CONTINUE_SESSION,
+        hmac,
     );
 
     // ### Execute `TPM2_CreatePrimary` command!
@@ -224,8 +232,8 @@ pub fn rp_hash<CmdT: TpmCommand, D: Digest>(
 // TODO:
 // > If sessionKey and End of Example authvalue are both the Empty Buffer,
 // > see Clause 17.6.15.
-pub fn hmac_computation<M: Mac>(
-    p_hash: &GenericArray<u8, <M as OutputSizeUser>::OutputSize>,
+pub fn hmac_computation<D: Digest, M: Mac>(
+    p_hash: &GenericArray<u8, <D as OutputSizeUser>::OutputSize>,
     nonce_newer: &Tpm2bDigest,
     nonce_older: &Tpm2bDigest,
     session_attributes: &TpmaSession,
@@ -248,21 +256,23 @@ pub fn hmac_computation<M: Mac>(
 }
 
 // A simple Hmac session (TODO: this should probably do some extra work).
-pub struct HmacSession<D> {
+pub struct HmacSession<D, M> {
     // TODO: const size should be standardized?
     buf: [u8; 1_024],
     session_handle: TpmiShAuthSession,
     nonce_caller: Tpm2bDigest,
     nonce_tpm: Tpm2bNonce,
     session_attributes: TpmaSession,
-    _p: std::marker::PhantomData<D>,
+    mac: M,
+    _p: std::marker::PhantomData<(D, M)>,
 }
 
-impl<D> HmacSession<D> {
+impl<D, M> HmacSession<D, M> {
     pub fn new(
         session_handle: TpmiShAuthSession,
         nonce_tpm: Tpm2bNonce,
         session_attributes: TpmaSession,
+        mac: M,
     ) -> Self {
         Self {
             buf: [0u8; 1_024],
@@ -270,14 +280,16 @@ impl<D> HmacSession<D> {
             nonce_caller: Tpm2bDigest::default(),
             nonce_tpm,
             session_attributes,
+            mac,
             _p: std::marker::PhantomData,
         }
     }
 }
 
-impl<D> Session for HmacSession<D>
+impl<D, M> Session for HmacSession<D, M>
 where
     D: Digest,
+    M: Mac + Clone,
 {
     fn get_auth_command<CmdT: TpmCommand>(
         &mut self,
@@ -294,11 +306,11 @@ where
         let r: [u8; 32] = rand::random();
         self.nonce_caller = Tpm2bDigest::from_bytes(&r).expect("nonce size must be valid");
 
-        let hasher = Sha256::new();
-        let cp_hash = cp_hash(cmd, cmd_handles, &mut self.buf, hasher).unwrap();
+        let hasher = D::new();
+        let cp_hash = cp_hash::<CmdT, D>(cmd, cmd_handles, &mut self.buf, hasher).unwrap();
 
-        let mac = Hmac::<Sha256>::new_from_slice(&[]).unwrap();
-        let hmac = hmac_computation(
+        let mac = self.mac.clone();
+        let hmac = hmac_computation::<D, M>(
             &cp_hash,
             &self.nonce_caller,
             &self.nonce_tpm,
@@ -331,11 +343,11 @@ where
             return Err(TssTcsError::BadParameter.into());
         }
 
-        let hasher = Sha256::new();
-        let rp_hash = rp_hash::<CmdT, _>(resp, &mut self.buf, hasher)?;
+        let hasher = D::new();
+        let rp_hash = rp_hash::<CmdT, D>(resp, &mut self.buf, hasher)?;
 
-        let mac = Hmac::<Sha256>::new_from_slice(&[]).unwrap();
-        let computed_hmac = hmac_computation(
+        let mac = self.mac.clone();
+        let computed_hmac = hmac_computation::<D, M>(
             &rp_hash,
             &auth.nonce,
             &self.nonce_caller,
