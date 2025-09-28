@@ -123,7 +123,7 @@ fn test_start_auth_create_primary_with_rsa_encryption() {
     let mut tpm = FileIoTpm::new("/dev/tpmrm0").unwrap();
     let auth_val = vec![];
 
-    // ## Prepare payload fo `TPM2_LoadExternal`
+    // ## Prepare payload for `TPM2_LoadExternal` command.
 
     let object_attributes = TpmaObject::FIXED_TPM
         | TpmaObject::FIXED_PARENT
@@ -162,11 +162,11 @@ fn test_start_auth_create_primary_with_rsa_encryption() {
     let mut cmd_session = ();
     let cmd_handles = ();
 
-    // ### Execute `TPM2_StartAuthSession` command!
-    let (_resp, session_handle) =
+    // ### Execute `TPM2_LoadExternal` command!
+    let (_resp, object_handle) =
         run_command_with_handles(&cmd, &cmd_handles, &mut cmd_session, &mut tpm).unwrap();
 
-    // ## Prepare payload for `TPM2_StartAuthSession`
+    // ## Prepare payload for `TPM2_StartAuthSession` command.
 
     // Setup the TPM's RSA public key.
     let rsa_pem = fs::read_to_string("../ek_public.pem").unwrap();
@@ -178,6 +178,7 @@ fn test_start_auth_create_primary_with_rsa_encryption() {
     let mut rng = rsa::rand_core::OsRng;
     let salt = rand::random::<[u8; 20]>();
     let padding = rsa::Oaep::new::<sha2::Sha256>();
+    //let padding = rsa::Oaep::new_with_label::<sha2::Sha256, &str>("");
     let encrypted_salt = rsa.encrypt(&mut rng, padding, &salt).unwrap();
 
     //let encrypted_salt = [];
@@ -192,8 +193,8 @@ fn test_start_auth_create_primary_with_rsa_encryption() {
     };
 
     let cmd_handles = StartAuthSessionHandles {
-        //tpm_key: TpmiDhObject(0x81000011),
-        tpm_key: TpmiDhObject(session_handle.0),
+        tpm_key: TpmiDhObject(object_handle.0),
+        //tpm_key: TpmiDhObject::RHNull,
         bind: TpmiDhEntity::RHNull,
     };
 
