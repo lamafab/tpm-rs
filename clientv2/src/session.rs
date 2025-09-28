@@ -126,9 +126,7 @@ where
         auth: &TpmsAuthResponse,
         buf: &mut [u8],
     ) -> TssResult<()> {
-        // TODO: Do those sizes have to match EXACTLY? Afaik 16bytes minimum,
-        // and `output_size()` max.
-        if auth.nonce.get_size() as usize != D::Hasher::OUTPUT_SIZE
+        if auth.nonce.get_size() as usize != D::Hasher::OUTPUT_SIZE.min(64)
             || auth.session_attributes != self.session_attributes
             || auth.hmac.get_size() as usize != D::Hmac::OUTPUT_SIZE
         {
@@ -146,8 +144,7 @@ where
             &self.nonce_caller,
             &self.session_attributes,
             buf,
-        )
-        .unwrap();
+        )?;
 
         if auth.hmac.get_buffer() != computed_hmac.get_buffer() {
             // TODO: Change error variant?
