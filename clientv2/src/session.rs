@@ -26,22 +26,28 @@ pub trait Session {
 }
 
 // A simple Hmac session (TODO: this should probably do some extra work).
-pub struct HmacSession<D> {
+pub struct HmacSession<D>
+where
+    D: AlgoDigest,
+{
     // TODO: const size should be standardized?
     buf: [u8; 1_024],
     session_handle: TpmiShAuthSession,
     session_attributes: TpmaSession,
-    session_key: Option<Vec<u8>>,
+    session_key: Option<[u8; 32]>,
     nonce_caller: Tpm2bDigest,
     nonce_tpm: Tpm2bNonce,
     _p: std::marker::PhantomData<D>,
 }
 
-impl<D> HmacSession<D> {
+impl<D> HmacSession<D>
+where
+    D: AlgoDigest,
+{
     pub fn new(
         session_handle: TpmiShAuthSession,
         session_attributes: TpmaSession,
-        session_key: Option<Vec<u8>>,
+        session_key: Option<[u8; 32]>,
         nonce_tpm: Tpm2bNonce,
     ) -> Self {
         Self {
@@ -93,6 +99,7 @@ where
             &self.nonce_caller,
             &self.nonce_tpm,
             &self.session_attributes,
+            &mut self.buf,
         )
         .unwrap();
 
@@ -139,6 +146,7 @@ where
             &auth.nonce,
             &self.nonce_caller,
             &self.session_attributes,
+            &mut self.buf,
         )
         .unwrap();
 
