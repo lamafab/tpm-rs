@@ -34,8 +34,7 @@ impl AuthorizationArea for () {
         _handles: &CmdT::Handles,
         _buf: &mut [u8],
     ) -> TssResult<usize> {
-        // TODO: Good error variant?
-        TssResult::Err(TssTcsError::Unsupported.into())
+        Ok(0)
     }
     fn read_response_data<CmdT: TpmCommand>(
         &mut self,
@@ -44,8 +43,7 @@ impl AuthorizationArea for () {
         _unmarsh: &mut UnmarshalBuf,
         _wrk_buf: &mut [u8],
     ) -> TssResult<()> {
-        // TODO: Good error variant?
-        TssResult::Err(TssTcsError::Unsupported.into())
+        Ok(())
     }
 }
 
