@@ -18,7 +18,7 @@ use tpm2_rs_base::{
 fn test_start_auth_create_primary() {
     // Use the specified TPM, with and empty auth key!
     let mut tpm = FileIoTpm::new("/dev/tpmrm0").unwrap();
-    //let auth_key = [];
+    let auth_val = vec![];
 
     // ## Prepare payload for `TPM2_StartAuthSession`
 
@@ -95,6 +95,7 @@ fn test_start_auth_create_primary() {
         session_key::<AlgoSha256Hmac>(&[], &[], &resp.nonce_tpm, &nonce_caller).unwrap();
 
     let mut session = HmacSession::<AlgoSha256>::new(
+        auth_val,
         session_handle,
         TpmaSession::CONTINUE_SESSION,
         Some(session_key),

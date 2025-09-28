@@ -66,7 +66,7 @@ impl<T: Session> AuthorizationArea for T {
 
         // Marshal the authorization area _after_ its reserved size indicator.
         let n = self
-            .get_auth_command(cmd, handles, buf)
+            .get_auth_command(cmd, handles, buf)?
             .try_marshal(&mut buf[SIZE_LEN..])?;
 
         // Marshal the size indicator _before_ the authorization area.

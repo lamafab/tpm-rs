@@ -16,7 +16,7 @@ pub trait Session {
         cmd: &CmdT,
         cmd_handles: &CmdT::Handles,
         buf: &mut [u8],
-    ) -> TpmsAuthCommand;
+    ) -> TssResult<TpmsAuthCommand>;
     /// Validates the authorization response for this session.
     fn validate_auth_response<CmdT: TpmCommand>(
         &mut self,
@@ -83,7 +83,7 @@ where
         cmd: &CmdT,
         cmd_handles: &CmdT::Handles,
         buf: &mut [u8],
-    ) -> TpmsAuthCommand {
+    ) -> TssResult<TpmsAuthCommand> {
         // > The minimum size for nonceCaller in TPM2_StartAuthSession() is 16
         // > octets. The maximum size that may be requested for nonceTPM is the
         // > size of the digest produced by the authorization session hash.
@@ -94,11 +94,10 @@ where
         // hasher output is larger than that, we just cut it off at 64-bytes.
         buf[..64].copy_from_slice(&rand::random::<[u8; 64]>());
         let cut_off = D::Hasher::OUTPUT_SIZE.min(64);
-        self.nonce_caller =
-            Tpm2bDigest::from_bytes(&buf[..cut_off]).expect("nonce size must be valid");
+        self.nonce_caller = Tpm2bDigest::from_bytes(&buf[..cut_off])?;
 
         let session_key = self.session_key.as_ref().map(|k| k.as_ref()).unwrap_or(&[]);
-        let cp_hash = cp_hash::<CmdT, D::Hasher>(cmd, cmd_handles, buf).unwrap();
+        let cp_hash = cp_hash::<CmdT, D::Hasher>(cmd, cmd_handles, buf)?;
 
         let computed_hmac = hmac_computation::<D::Hmac>(
             &self.auth_val,
@@ -108,15 +107,16 @@ where
             &self.nonce_tpm,
             &self.session_attributes,
             buf,
-        )
-        .unwrap();
+        )?;
 
-        TpmsAuthCommand {
+        let cmd = TpmsAuthCommand {
             session_handle: self.session_handle,
             nonce: self.nonce_caller,
             session_attributes: self.session_attributes,
             hmac: computed_hmac,
-        }
+        };
+
+        Ok(cmd)
     }
     fn validate_auth_response<CmdT: TpmCommand>(
         &mut self,
