@@ -51,18 +51,18 @@ where
 pub fn cp_hash<CmdT: TpmCommand, H: AlgoDigestHasher>(
     cmd: &CmdT,
     cmd_handles: &CmdT::Handles,
-    buf: &mut [u8],
+    wrk_buf: &mut [u8],
 ) -> TssResult<H::Output> {
     let mut hash = H::new();
 
-    let n = CmdT::CMD_CODE.try_marshal(buf)?;
-    hash.update(&buf[..n]);
+    let n = CmdT::CMD_CODE.try_marshal(wrk_buf)?;
+    hash.update(&wrk_buf[..n]);
 
-    let n = cmd_handles.try_marshal(buf)?;
-    hash.update(&buf[..n]);
+    let n = cmd_handles.try_marshal(wrk_buf)?;
+    hash.update(&wrk_buf[..n]);
 
-    let n = cmd.try_marshal(buf)?;
-    hash.update(&buf[..n]);
+    let n = cmd.try_marshal(wrk_buf)?;
+    hash.update(&wrk_buf[..n]);
 
     Ok(hash.finalize())
 }
@@ -73,7 +73,7 @@ pub fn cp_hash<CmdT: TpmCommand, H: AlgoDigestHasher>(
 /// > command audits.
 pub fn rp_hash<CmdT: TpmCommand, H: AlgoDigestHasher>(
     resp: &CmdT::RespT,
-    buf: &mut [u8],
+    wrk_buf: &mut [u8],
 ) -> TssResult<H::Output> {
     let mut hash = H::new();
 
@@ -82,14 +82,14 @@ pub fn rp_hash<CmdT: TpmCommand, H: AlgoDigestHasher>(
     // > An rpHash needs to be computed only when the responseCode is
     // > TPM_SUCCESS, which means that it is redundant to include the response
     // > code. It is retained for legacy reasons.
-    let n = 0u32.try_marshal(buf)?;
-    hash.update(&buf[..n]);
+    let n = 0u32.try_marshal(wrk_buf)?;
+    hash.update(&wrk_buf[..n]);
 
-    let n = CmdT::CMD_CODE.try_marshal(buf)?;
-    hash.update(&buf[..n]);
+    let n = CmdT::CMD_CODE.try_marshal(wrk_buf)?;
+    hash.update(&wrk_buf[..n]);
 
-    let n = resp.try_marshal(buf)?;
-    hash.update(&buf[..n]);
+    let n = resp.try_marshal(wrk_buf)?;
+    hash.update(&wrk_buf[..n]);
 
     Ok(hash.finalize())
 }
@@ -109,7 +109,7 @@ pub fn hmac_computation<M>(
     nonce_newer: &Tpm2bNonce,
     nonce_older: &Tpm2bNonce,
     session_attributes: &TpmaSession,
-    buf: &mut [u8],
+    wrk_buf: &mut [u8],
 ) -> TssResult<Tpm2bDigest>
 where
     M: AlgoDigestHmac,
@@ -117,27 +117,27 @@ where
     let n0 = session_key.len();
     let n1 = auth_val.len();
 
-    if buf.len() < n0 + n1 {
+    if wrk_buf.len() < n0 + n1 {
         return TssResult::Err(TssTcsError::OutOfMemory.into());
     }
 
     // Reuse buf to concat key.
-    buf[00..n0 + 00].copy_from_slice(session_key);
-    buf[n0..n0 + n1].copy_from_slice(auth_val);
-    let key = &buf[..n0 + n1];
+    wrk_buf[00..n0 + 00].copy_from_slice(session_key);
+    wrk_buf[n0..n0 + n1].copy_from_slice(auth_val);
+    let key = &wrk_buf[..n0 + n1];
 
     let mut mac = M::new(key);
 
     mac.update(p_hash);
 
-    let n = nonce_newer.try_marshal(buf)?;
-    mac.update(&buf[2..n]); // NOTE: excluding size indicator!
+    let n = nonce_newer.try_marshal(wrk_buf)?;
+    mac.update(&wrk_buf[2..n]); // NOTE: excluding size indicator!
 
-    let n = nonce_older.try_marshal(buf)?;
-    mac.update(&buf[2..n]); // NOTE: excluding size indicator!
+    let n = nonce_older.try_marshal(wrk_buf)?;
+    mac.update(&wrk_buf[2..n]); // NOTE: excluding size indicator!
 
-    let n = session_attributes.try_marshal(buf)?;
-    mac.update(&buf[..n]);
+    let n = session_attributes.try_marshal(wrk_buf)?;
+    mac.update(&wrk_buf[..n]);
 
     Tpm2bDigest::from_bytes(&mac.finalize().as_ref()).map_err(Into::into)
 }
