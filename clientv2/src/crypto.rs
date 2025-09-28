@@ -27,7 +27,7 @@ where
     Ok(mac.finalize())
 }
 
-/// Spec (Part 1): 17.6.10 Bound Session Key Generation
+/// Spec (Part 1): 17.6.8 sessionKey Creation
 pub fn session_key<M>(
     auth_val: &[u8],
     salt: &[u8],

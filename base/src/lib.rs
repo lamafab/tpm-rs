@@ -925,6 +925,7 @@ pub struct Tpm2bSensitiveCreate {
 #[marshalable(tpm2b_simple)]
 pub struct Tpm2bPublicKeyRsa {
     size: u16,
+    #[marshalable(length=size)]
     buffer: [u8; TPM2_MAX_RSA_KEY_BYTES as usize],
 }
 
@@ -1425,9 +1426,11 @@ pub struct TpmsAuthResponse {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug, Marshalable)]
+#[marshalable(tpm2b_simple)]
 pub struct Tpm2bSensitive {
     size: u16,
+    #[marshalable(length=size)]
     sensitive_area: [u8; size_of::<TpmtSensitive>()],
 }
 
