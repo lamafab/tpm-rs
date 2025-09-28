@@ -102,7 +102,7 @@ where
 
     // Unmarshal response parameters.
     let resp = CmdT::RespT::try_unmarshal(&mut unmarsh)?;
-    // Reuse the command buffer as a workbuffer
+    // Repurpose the command buffer as a work-buffer
     let wrk_buf = &mut cmd_buffer;
     cmd_sessions.read_response_data::<CmdT>(&resp, &resp_handles, &mut unmarsh, wrk_buf)?;
 

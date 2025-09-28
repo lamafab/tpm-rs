@@ -56,17 +56,20 @@ impl<T: Session> AuthorizationArea for T {
         handles: &CmdT::Handles,
         buf: &mut [u8],
     ) -> TssResult<usize> {
+        // The length of the authorization area size indicator.
         const SIZE_LEN: usize = 4;
 
-        if buf.len() < 4 {
+        if buf.len() < SIZE_LEN {
             return TssResult::Err(TssTcsError::OutOfMemory.into());
         }
 
+        // Marshal the authorization area _after_ its reserved size indicator.
         let n = self
             .get_auth_command(cmd, handles, buf)
             .try_marshal(&mut buf[SIZE_LEN..])?;
 
-        (n as u32).try_marshal(&mut buf[..SIZE_LEN]).expect("TODO");
+        // Marshal the size indicator _before_ the authorization area.
+        (n as u32).try_marshal(&mut buf[..SIZE_LEN])?;
 
         Ok(SIZE_LEN + n)
     }
