@@ -27,7 +27,7 @@ pub trait Session {
     ) -> TssResult<()>;
 }
 
-// A simple Hmac session (TODO: this should probably do some extra work).
+// A simple Hmac session.
 pub struct HmacSession<D>
 where
     D: AlgoDigest,
