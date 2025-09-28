@@ -97,7 +97,7 @@ where
         self.nonce_caller = Tpm2bDigest::from_bytes(&buf[..cut_off])?;
 
         // Retrieve the session key if available, compute the command+handles
-        // hash, and then the corresponding HMAC.
+        // hash, and then the corresponding HMAC - to be validated by the TPM.
         let session_key = self.session_key.as_ref().map(|k| k.as_ref()).unwrap_or(&[]);
         let cp_hash = cp_hash::<CmdT, D::Hasher>(cmd, cmd_handles, buf)?;
 
