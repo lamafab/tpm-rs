@@ -32,6 +32,7 @@ pub struct HmacSession<D>
 where
     D: AlgoDigest,
 {
+    auth_val: Vec<u8>,
     /// The session handle returned by the `TPM2_StartAuthSession` command.
     session_handle: TpmiShAuthSession,
     /// The attributes used for this session.
@@ -53,12 +54,14 @@ where
     D: AlgoDigest,
 {
     pub fn new(
+        auth_val: Vec<u8>,
         session_handle: TpmiShAuthSession,
         session_attributes: TpmaSession,
         session_key: Option<<D::Hmac as AlgoDigestHmac>::Output>,
         nonce_tpm: Tpm2bNonce,
     ) -> Self {
         Self {
+            auth_val,
             session_handle,
             session_attributes,
             session_key,
@@ -91,16 +94,14 @@ where
         // hasher output is larger than that, we just cut it off at 64-bytes.
         buf[..64].copy_from_slice(&rand::random::<[u8; 64]>());
         let cut_off = D::Hasher::OUTPUT_SIZE.min(64);
-        let nonce_buf = &buf[..cut_off];
+        self.nonce_caller =
+            Tpm2bDigest::from_bytes(&buf[..cut_off]).expect("nonce size must be valid");
 
-        self.nonce_caller = Tpm2bDigest::from_bytes(&nonce_buf).expect("nonce size must be valid");
-
-        let auth_val = &[];
-        let cp_hash = cp_hash::<CmdT, D::Hasher>(cmd, cmd_handles, buf).unwrap();
         let session_key = self.session_key.as_ref().map(|k| k.as_ref()).unwrap_or(&[]);
+        let cp_hash = cp_hash::<CmdT, D::Hasher>(cmd, cmd_handles, buf).unwrap();
 
         let computed_hmac = hmac_computation::<D::Hmac>(
-            auth_val,
+            &self.auth_val,
             &session_key,
             cp_hash.as_ref(),
             &self.nonce_caller,
@@ -134,13 +135,11 @@ where
             return Err(TssTcsError::BadParameter.into());
         }
 
+        let session_key = self.session_key.as_ref().map(|k| k.as_ref()).unwrap_or(&[]);
         let rp_hash = rp_hash::<CmdT, D::Hasher>(resp, buf)?;
 
-        let auth_val = &[];
-        let session_key = self.session_key.as_ref().map(|k| k.as_ref()).unwrap_or(&[]);
-
         let computed_hmac = hmac_computation::<D::Hmac>(
-            auth_val,
+            &self.auth_val,
             &session_key,
             rp_hash.as_ref(),
             &auth.nonce,
