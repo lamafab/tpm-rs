@@ -12,3 +12,6 @@ hex = "0.4.3"
 hmac = "0.12.1"
 rand = "0.9.2"
 sha2 = "0.10.9"
+rsa = "0.9.8"
+# Required for the `rsa` crate, since newer versions require `edition = "2024"`.
+base64ct = "=1.7.3"
