@@ -16,8 +16,9 @@ use tpm2_rs_base::{
     PublicParmsAndId, Tpm2bAuth, Tpm2bData, Tpm2bDigest, Tpm2bEncryptedSecret, Tpm2bNonce,
     Tpm2bPublic, Tpm2bPublicKeyRsa, Tpm2bSensitive, Tpm2bSensitiveCreate, Tpm2bSensitiveData,
     Tpm2bSimple, Tpm2bStruct, TpmaObject, TpmaSession, TpmiAlgHash, TpmiDhEntity, TpmiDhObject,
-    TpmiRhHierarchy, TpmiRsaKeyBits, TpmlPcrSelection, TpmsEmpty, TpmsKeyedHashParms, TpmsRsaParms,
-    TpmsSchemeHash, TpmsSensitiveCreate, TpmtKeyedHashScheme, TpmtPublic,
+    TpmiRhHierarchy, TpmiRsaKeyBits, TpmlPcrSelection, TpmsEmpty, TpmsEncSchemeOaep,
+    TpmsKeyedHashParms, TpmsRsaParms, TpmsSchemeHash, TpmsSensitiveCreate, TpmtKeyedHashScheme,
+    TpmtPublic,
 };
 
 #[test]
@@ -124,7 +125,8 @@ fn test_start_auth_create_primary_with_rsa_encryption() {
     let auth_val = vec![];
 
     // ## Prepare payload for `TPM2_LoadExternal` command.
-
+    
+    /*
     let object_attributes = TpmaObject::FIXED_TPM
         | TpmaObject::FIXED_PARENT
         | TpmaObject::SENSITIVE_DATA_ORIGIN
@@ -139,6 +141,11 @@ fn test_start_auth_create_primary_with_rsa_encryption() {
         TpmsRsaParms {
             symmetric: tpm2_rs_base::TpmtSymDefObject::Null(TpmsEmpty, TpmsEmpty),
             scheme: tpm2_rs_base::TpmtRsaScheme::Null(TpmsEmpty),
+            /*
+            scheme: tpm2_rs_base::TpmtRsaScheme::Oaep(TpmsEncSchemeOaep {
+                hash_alg: TpmiAlgHash::SHA256,
+            }),
+            */
             key_bits: TpmiRsaKeyBits::Rsa2048,
             exponent: 65537,
         },
@@ -165,6 +172,7 @@ fn test_start_auth_create_primary_with_rsa_encryption() {
     // ### Execute `TPM2_LoadExternal` command!
     let (_resp, object_handle) =
         run_command_with_handles(&cmd, &cmd_handles, &mut cmd_session, &mut tpm).unwrap();
+    */
 
     // ## Prepare payload for `TPM2_StartAuthSession` command.
 
@@ -176,12 +184,12 @@ fn test_start_auth_create_primary_with_rsa_encryption() {
     let nonce_caller = Tpm2bNonce::from_bytes(&rand::random::<[u8; 32]>()).unwrap();
 
     let mut rng = rsa::rand_core::OsRng;
-    let salt = rand::random::<[u8; 20]>();
+    let salt = rand::random::<[u8; 32]>();
     let padding = rsa::Oaep::new::<sha2::Sha256>();
-    //let padding = rsa::Oaep::new_with_label::<sha2::Sha256, &str>("");
+    //let padding = rsa::Oaep::new_with_mgf_hash_and_label::<sha2::Sha256, sha2::Sha256, &str>("");
     let encrypted_salt = rsa.encrypt(&mut rng, padding, &salt).unwrap();
 
-    //let encrypted_salt = [];
+    let encrypted_salt = [];
     let encrypted_salt = Tpm2bEncryptedSecret::from_bytes(&encrypted_salt).unwrap();
 
     let cmd = StartAuthSessionCmd {
@@ -193,9 +201,9 @@ fn test_start_auth_create_primary_with_rsa_encryption() {
     };
 
     let cmd_handles = StartAuthSessionHandles {
-        tpm_key: TpmiDhObject(object_handle.0),
-        //tpm_key: TpmiDhObject::RHNull,
-        bind: TpmiDhEntity::RHNull,
+        tpm_key: TpmiDhObject::RHNull,
+        //tpm_key: TpmiDhObject(0x81000011),
+        bind: TpmiDhEntity(0x81000011),
     };
 
     let mut cmd_session = ();

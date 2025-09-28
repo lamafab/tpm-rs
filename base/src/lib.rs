@@ -973,6 +973,7 @@ pub enum TpmuEncryptedSecret {
 #[marshalable(tpm2b_simple)]
 pub struct Tpm2bEncryptedSecret {
     size: u16,
+    #[marshalable(length=size)]
     secret: [u8; TpmuEncryptedSecret::UNION_SIZE],
 }
 
