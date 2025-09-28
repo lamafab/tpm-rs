@@ -12,7 +12,7 @@ where
     let mut mac = M::new(key);
 
     let counter = 1u32;
-    let bits = M::output_size() as u32 * 8;
+    let bits = M::OUTPUT_SIZE as u32 * 8;
 
     mac.update(&counter.to_be_bytes());
     mac.update(label);

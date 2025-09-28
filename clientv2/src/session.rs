@@ -34,7 +34,7 @@ where
     buf: [u8; 1_024],
     session_handle: TpmiShAuthSession,
     session_attributes: TpmaSession,
-    session_key: Option<[u8; 32]>,
+    session_key: Option<<D::Hmac as AlgoDigestHmac>::Output>,
     nonce_caller: Tpm2bDigest,
     nonce_tpm: Tpm2bNonce,
     _p: std::marker::PhantomData<D>,
@@ -47,7 +47,7 @@ where
     pub fn new(
         session_handle: TpmiShAuthSession,
         session_attributes: TpmaSession,
-        session_key: Option<[u8; 32]>,
+        session_key: Option<<D::Hmac as AlgoDigestHmac>::Output>,
         nonce_tpm: Tpm2bNonce,
     ) -> Self {
         Self {
@@ -78,7 +78,7 @@ where
         // > Example: For SHA-1, the maximum size for nonceTPM is 20 octets and
         // > for SHA256 it is 32 octets.
         let nonce_buf: [u8; 32] = rand::random();
-        let nonce_buf = &nonce_buf[..D::Hasher::output_size()];
+        let nonce_buf = &nonce_buf[..D::Hasher::OUTPUT_SIZE];
 
         self.nonce_caller = Tpm2bDigest::from_bytes(&nonce_buf).expect("nonce size must be valid");
 
@@ -86,11 +86,7 @@ where
 
         let auth_val = &[];
 
-        let session_key = self
-            .session_key
-            .as_ref()
-            .map(|k| k.as_slice())
-            .unwrap_or(&[]);
+        let session_key = self.session_key.as_ref().map(|k| k.as_ref()).unwrap_or(&[]);
 
         let computed_hmac = hmac_computation::<D::Hmac>(
             auth_val,
@@ -118,14 +114,11 @@ where
         resp_handles: &CmdT::RespHandles,
         auth: &TpmsAuthResponse,
     ) -> TssResult<()> {
-        // TODO:
-        assert_eq!(D::Hasher::output_size(), D::Hmac::output_size());
-
         // TODO: Do those sizes have to match EXACTLY? Afaik 16bytes minimum,
         // and `output_size()` max.
-        if auth.nonce.get_size() as usize != D::Hasher::output_size()
+        if auth.nonce.get_size() as usize != D::Hasher::OUTPUT_SIZE
             || auth.session_attributes != self.session_attributes
-            || auth.hmac.get_size() as usize != D::Hmac::output_size()
+            || auth.hmac.get_size() as usize != D::Hmac::OUTPUT_SIZE
         {
             return Err(TssTcsError::BadParameter.into());
         }
@@ -133,11 +126,7 @@ where
         let rp_hash = rp_hash::<CmdT, D::Hasher>(resp, &mut self.buf)?;
 
         let auth_val = &[];
-        let session_key = self
-            .session_key
-            .as_ref()
-            .map(|k| k.as_slice())
-            .unwrap_or(&[]);
+        let session_key = self.session_key.as_ref().map(|k| k.as_ref()).unwrap_or(&[]);
 
         let computed_hmac = hmac_computation::<D::Hmac>(
             auth_val,
