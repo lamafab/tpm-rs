@@ -163,10 +163,8 @@ fn test_start_auth_create_primary_with_rsa_encryption() {
     let cmd_handles = ();
 
     // ### Execute `TPM2_StartAuthSession` command!
-    let (resp, session_handle) =
+    let (_resp, session_handle) =
         run_command_with_handles(&cmd, &cmd_handles, &mut cmd_session, &mut tpm).unwrap();
-
-    return;
 
     // ## Prepare payload for `TPM2_StartAuthSession`
 
@@ -194,7 +192,8 @@ fn test_start_auth_create_primary_with_rsa_encryption() {
     };
 
     let cmd_handles = StartAuthSessionHandles {
-        tpm_key: TpmiDhObject(0x81000011),
+        //tpm_key: TpmiDhObject(0x81000011),
+        tpm_key: TpmiDhObject(session_handle.0),
         bind: TpmiDhEntity::RHNull,
     };
 

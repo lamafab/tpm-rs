@@ -12,7 +12,7 @@ pub struct LoadCmd {}
 
 /// [TPM2.0 1.83] 12.3 TPM2_LoadExternal (Command)
 #[repr(C)]
-#[derive(Clone, Copy, PartialEq, Marshalable)]
+#[derive(Debug, Clone, Copy, PartialEq, Marshalable)]
 pub struct LoadExternalCmd {
     pub in_private: Tpm2bSensitive,
     pub in_public: Tpm2bPublic,
@@ -30,14 +30,14 @@ impl TpmCommand for LoadExternalCmd {
 
 /// [TPM2.0 1.83] 12.3 TPM2_LoadExternal (Command)
 #[repr(C)]
-#[derive(Clone, Copy, PartialEq, Marshalable)]
+#[derive(Debug, Clone, Copy, PartialEq, Marshalable)]
 pub struct LoadExternalResp {
     pub name: Tpm2bName,
 }
 
 /// [TPM2.0 1.83] 12.4 TPM2_ReadPublic (Command)
 #[repr(C)]
-#[derive(Clone, Copy, PartialEq, Marshalable)]
+#[derive(Debug, Clone, Copy, PartialEq, Marshalable)]
 pub struct ReadPublicCmd {
     // No parameters.
 }
@@ -54,7 +54,7 @@ impl TpmCommand for ReadPublicCmd {
 
 /// [TPM2.0 1.83] 12.4 TPM2_ReadPublic (Command)
 #[repr(C)]
-#[derive(Clone, Copy, PartialEq, Marshalable)]
+#[derive(Debug, Clone, Copy, PartialEq, Marshalable)]
 pub struct ReadPublicResp {
     pub out_public: Tpm2bPublic,
     pub name: Tpm2bName,
