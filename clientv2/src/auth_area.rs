@@ -11,7 +11,7 @@ pub trait AuthorizationArea {
         &mut self,
         cmd: &CmdT,
         handles: &CmdT::Handles,
-        wrk_buf: &mut [u8],
+        buf: &mut [u8],
     ) -> TssResult<usize>;
     fn read_response_data<CmdT: TpmCommand>(
         &mut self,
@@ -23,6 +23,7 @@ pub trait AuthorizationArea {
     ) -> TssResult<()>;
 }
 
+/// Empty session.
 impl AuthorizationArea for () {
     fn has_sessions(&self) -> bool {
         false
@@ -33,7 +34,8 @@ impl AuthorizationArea for () {
         _handles: &CmdT::Handles,
         _buf: &mut [u8],
     ) -> TssResult<usize> {
-        Ok(0)
+        // TODO: Good error variant?
+        TssResult::Err(TssTcsError::Unsupported.into())
     }
     fn read_response_data<CmdT: TpmCommand>(
         &mut self,
@@ -42,7 +44,8 @@ impl AuthorizationArea for () {
         _unmarsh: &mut UnmarshalBuf,
         _wrk_buf: &mut [u8],
     ) -> TssResult<()> {
-        Ok(())
+        // TODO: Good error variant?
+        TssResult::Err(TssTcsError::Unsupported.into())
     }
 }
 
