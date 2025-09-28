@@ -2,7 +2,7 @@
 
 use crate::commands::{Marshalable, TpmCommand};
 use crate::constants::{TpmCc, TpmHandle};
-use crate::{Tpm2bName, Tpm2bPublic, Tpm2bSensitive, TpmiRhHierarchy};
+use crate::{Tpm2bName, Tpm2bPublic, Tpm2bSensitive, TpmiDhObject, TpmiRhHierarchy};
 
 /// [TPM2.0 1.83] 12.1 TPM2_Create (Command)
 pub struct CreateCmd {}
@@ -20,11 +20,11 @@ pub struct LoadExternalCmd {
 }
 
 impl TpmCommand for LoadExternalCmd {
-    const CMD_CODE: TpmCc = TpmCc::CreatePrimary;
+    const CMD_CODE: TpmCc = TpmCc::LoadExternal;
 
     type Handles = ();
     type RespT = LoadExternalResp;
-    // Object handle of type TPM_HT_TRANSIENT for the loaded object.
+    /// Object handle of type TPM_HT_TRANSIENT for the loaded object.
     type RespHandles = TpmHandle;
 }
 
@@ -36,7 +36,30 @@ pub struct LoadExternalResp {
 }
 
 /// [TPM2.0 1.83] 12.4 TPM2_ReadPublic (Command)
-pub struct ReadPublicCmd {}
+#[repr(C)]
+#[derive(Clone, Copy, PartialEq, Marshalable)]
+pub struct ReadPublicCmd {
+    // No parameters.
+}
+
+impl TpmCommand for ReadPublicCmd {
+    const CMD_CODE: TpmCc = TpmCc::ReadPublic;
+
+    /// TPM handle of an object
+    type Handles = TpmiDhObject;
+    type RespT = ReadPublicResp;
+    /// Object handle of type TPM_HT_TRANSIENT for the loaded object.
+    type RespHandles = ();
+}
+
+/// [TPM2.0 1.83] 12.4 TPM2_ReadPublic (Command)
+#[repr(C)]
+#[derive(Clone, Copy, PartialEq, Marshalable)]
+pub struct ReadPublicResp {
+    pub out_public: Tpm2bPublic,
+    pub name: Tpm2bName,
+    pub qualified_name: Tpm2bName,
+}
 
 /// [TPM2.0 1.83] 12.5 TPM2_ActivateCredential (Command)
 pub struct ActivateCredentialCmd {}

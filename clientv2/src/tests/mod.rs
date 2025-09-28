@@ -9,7 +9,8 @@ use crate::{
 use rsa::{pkcs8::DecodePublicKey, Pkcs1v15Encrypt, RsaPublicKey};
 use tpm2_rs_base::{
     commands::{
-        CreatePrimaryCmd, LoadCmd, LoadExternalCmd, StartAuthSessionCmd, StartAuthSessionHandles,
+        CreatePrimaryCmd, LoadCmd, LoadExternalCmd, ReadPublicCmd, StartAuthSessionCmd,
+        StartAuthSessionHandles,
     },
     constants::TpmSe,
     PublicParmsAndId, Tpm2bAuth, Tpm2bData, Tpm2bDigest, Tpm2bEncryptedSecret, Tpm2bNonce,

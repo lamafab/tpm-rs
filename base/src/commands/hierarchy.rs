@@ -22,7 +22,7 @@ impl TpmCommand for CreatePrimaryCmd {
 
     type Handles = TpmiRhHierarchy;
     type RespT = CreatePrimaryResp;
-    // Object handle of type TPM_HT_TRANSIENT.
+    /// Object handle of type TPM_HT_TRANSIENT.
     type RespHandles = TpmHandle;
 }
 
