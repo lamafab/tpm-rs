@@ -97,14 +97,17 @@ where
     let mut unmarsh = UnmarshalBuf::new(&resp_buffer[RespHeader::SIZE..resp_size]);
     let resp_handles = CmdT::RespHandles::try_unmarshal(&mut unmarsh)?;
     if resp_header.tag == TpmSt::Sessions {
+        // TODO: Do something with this?
         let _param_size = u32::try_unmarshal(&mut unmarsh)?;
     }
 
+    // Repurpose the command buffer as a work buffer, which might be used for
+    // temporary and miscellaneous operations.
+    let wrk_buffer = &mut cmd_buffer;
+
     // Unmarshal response parameters.
     let resp = CmdT::RespT::try_unmarshal(&mut unmarsh)?;
-    // Repurpose the command buffer as a work-buffer
-    let wrk_buf = &mut cmd_buffer;
-    cmd_sessions.read_response_data::<CmdT>(&resp, &resp_handles, &mut unmarsh, wrk_buf)?;
+    cmd_sessions.read_response_data::<CmdT>(&resp, &resp_handles, &mut unmarsh, wrk_buffer)?;
 
     if !unmarsh.is_empty() {
         return TssResult::Err(TssTcsError::TpmUnexpected.into());
