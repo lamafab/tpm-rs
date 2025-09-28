@@ -96,6 +96,8 @@ where
         let cut_off = D::Hasher::OUTPUT_SIZE.min(64);
         self.nonce_caller = Tpm2bDigest::from_bytes(&buf[..cut_off])?;
 
+        // Retrieve the session key if available, compute the command+handles
+        // hash, and then the corresponding HMAC.
         let session_key = self.session_key.as_ref().map(|k| k.as_ref()).unwrap_or(&[]);
         let cp_hash = cp_hash::<CmdT, D::Hasher>(cmd, cmd_handles, buf)?;
 
@@ -103,7 +105,9 @@ where
             &self.auth_val,
             &session_key,
             cp_hash.as_ref(),
+            // Our newly generated TPM is the newer.
             &self.nonce_caller,
+            // The nonce returned by the TPM is older.
             &self.nonce_tpm,
             &self.session_attributes,
             buf,
@@ -133,6 +137,9 @@ where
             return Err(TssTcsError::BadParameter.into());
         }
 
+        // Retrieve session key if available, compute the response hash, and
+        // then the corresponding HMAC - which is then matched against the
+        // returned HMAC from the TPM.
         let session_key = self.session_key.as_ref().map(|k| k.as_ref()).unwrap_or(&[]);
         let rp_hash = rp_hash::<CmdT, D::Hasher>(resp, buf)?;
 
@@ -140,13 +147,15 @@ where
             &self.auth_val,
             &session_key,
             rp_hash.as_ref(),
+            // The newly returned nonce by the TPM is newer.
             &auth.nonce,
+            // Our generated nonce on the command call is older.
             &self.nonce_caller,
             &self.session_attributes,
             buf,
         )?;
 
-        if auth.hmac.get_buffer() != computed_hmac.get_buffer() {
+        if computed_hmac.get_buffer() != auth.hmac.get_buffer() {
             // TODO: Change error variant?
             return Err(TssTcsError::BadParameter.into());
         }
