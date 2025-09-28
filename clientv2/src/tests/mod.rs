@@ -153,7 +153,7 @@ fn test_start_auth_create_primary_with_rsa_encryption() {
     .unwrap();
 
     let cmd = LoadExternalCmd {
-        in_private: Tpm2bSensitive::default(),
+        in_private: Tpm2bSensitive::from_bytes(&[]).unwrap(),
         in_public,
         hierarchy: TpmiRhHierarchy::TpmRhOwner,
     };
