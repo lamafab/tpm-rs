@@ -15,6 +15,7 @@ pub trait Session {
         &mut self,
         cmd: &CmdT,
         cmd_handles: &CmdT::Handles,
+        buf: &mut [u8],
     ) -> TpmsAuthCommand;
     /// Validates the authorization response for this session.
     fn validate_auth_response<CmdT: TpmCommand>(
@@ -22,6 +23,7 @@ pub trait Session {
         resp: &CmdT::RespT,
         resp_handles: &CmdT::RespHandles,
         auth: &TpmsAuthResponse,
+        buf: &mut [u8],
     ) -> TssResult<()>;
 }
 
@@ -30,8 +32,6 @@ pub struct HmacSession<D>
 where
     D: AlgoDigest,
 {
-    // TODO: const size should be standardized?
-    buf: [u8; 1_024],
     session_handle: TpmiShAuthSession,
     session_attributes: TpmaSession,
     session_key: Option<<D::Hmac as AlgoDigestHmac>::Output>,
@@ -51,7 +51,6 @@ where
         nonce_tpm: Tpm2bNonce,
     ) -> Self {
         Self {
-            buf: [0u8; 1_024],
             session_handle,
             session_attributes,
             session_key,
@@ -71,6 +70,7 @@ where
         &mut self,
         cmd: &CmdT,
         cmd_handles: &CmdT::Handles,
+        buf: &mut [u8],
     ) -> TpmsAuthCommand {
         // > The minimum size for nonceCaller in TPM2_StartAuthSession() is 16
         // > octets. The maximum size that may be requested for nonceTPM is the
@@ -82,7 +82,7 @@ where
 
         self.nonce_caller = Tpm2bDigest::from_bytes(&nonce_buf).expect("nonce size must be valid");
 
-        let cp_hash = cp_hash::<CmdT, D::Hasher>(cmd, cmd_handles, &mut self.buf).unwrap();
+        let cp_hash = cp_hash::<CmdT, D::Hasher>(cmd, cmd_handles, buf).unwrap();
 
         let auth_val = &[];
 
@@ -95,7 +95,7 @@ where
             &self.nonce_caller,
             &self.nonce_tpm,
             &self.session_attributes,
-            &mut self.buf,
+            buf,
         )
         .unwrap();
 
@@ -113,6 +113,7 @@ where
         // TODO: Do something with that? Validate it?
         resp_handles: &CmdT::RespHandles,
         auth: &TpmsAuthResponse,
+        buf: &mut [u8],
     ) -> TssResult<()> {
         // TODO: Do those sizes have to match EXACTLY? Afaik 16bytes minimum,
         // and `output_size()` max.
@@ -123,7 +124,7 @@ where
             return Err(TssTcsError::BadParameter.into());
         }
 
-        let rp_hash = rp_hash::<CmdT, D::Hasher>(resp, &mut self.buf)?;
+        let rp_hash = rp_hash::<CmdT, D::Hasher>(resp, buf)?;
 
         let auth_val = &[];
         let session_key = self.session_key.as_ref().map(|k| k.as_ref()).unwrap_or(&[]);
@@ -135,7 +136,7 @@ where
             &auth.nonce,
             &self.nonce_caller,
             &self.session_attributes,
-            &mut self.buf,
+            buf,
         )
         .unwrap();
 

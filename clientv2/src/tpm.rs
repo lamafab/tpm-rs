@@ -53,7 +53,7 @@ impl RespHeader {
 }
 
 /// Runs a command with provided handles and sessions.
-pub fn run_command_with_handles<CmdT, TpmT, AA: AuthorizationArea>(
+pub fn run_command_with_handles<CmdT, TpmT, AA>(
     cmd: &CmdT,
     cmd_handles: &CmdT::Handles,
     cmd_sessions: &mut AA,
@@ -62,6 +62,7 @@ pub fn run_command_with_handles<CmdT, TpmT, AA: AuthorizationArea>(
 where
     CmdT: TpmCommand,
     TpmT: Tpm,
+    AA: AuthorizationArea,
 {
     let mut cmd_buffer = [0u8; CMD_BUFFER_SIZE];
     let mut cmd_header = CmdHeader::new(cmd_sessions.has_sessions(), CmdT::CMD_CODE);
@@ -101,7 +102,9 @@ where
 
     // Unmarshal response parameters.
     let resp = CmdT::RespT::try_unmarshal(&mut unmarsh)?;
-    cmd_sessions.read_response_data::<CmdT>(&resp, &resp_handles, &mut unmarsh)?;
+    // Reuse the command buffer as a workbuffer
+    let wrk_buf = &mut cmd_buffer;
+    cmd_sessions.read_response_data::<CmdT>(&resp, &resp_handles, &mut unmarsh, wrk_buf)?;
 
     if !unmarsh.is_empty() {
         return TssResult::Err(TssTcsError::TpmUnexpected.into());
