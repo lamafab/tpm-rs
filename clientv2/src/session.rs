@@ -3,7 +3,7 @@ use crate::{
     crypto::{cp_hash, hmac_computation, rp_hash, session_key},
 };
 use tpm2_rs_base::{
-    commands::TpmCommand, Tpm2bData, Tpm2bDigest, Tpm2bNonce, Tpm2bSimple, TpmaSession,
+    commands::TpmCommand, Tpm2bAuth, Tpm2bData, Tpm2bDigest, Tpm2bNonce, Tpm2bSimple, TpmaSession,
     TpmiShAuthSession, TpmsAuthCommand, TpmsAuthResponse,
 };
 use tpm2_rs_errors::{TssResult, TssTcsError};
@@ -25,6 +25,52 @@ pub trait Session {
         auth: &TpmsAuthResponse,
         buf: &mut [u8],
     ) -> TssResult<()>;
+}
+
+pub struct PasswordSession {
+    auth: Tpm2bAuth,
+    session_attributes: TpmaSession,
+}
+
+impl PasswordSession {
+    pub fn new(auth: Tpm2bAuth, session_attributes: TpmaSession) -> Self {
+        PasswordSession {
+            auth,
+            session_attributes,
+        }
+    }
+}
+
+impl Session for PasswordSession {
+    fn get_auth_command<CmdT: TpmCommand>(
+        &mut self,
+        _cmd: &CmdT,
+        _cmd_handles: &CmdT::Handles,
+        _buf: &mut [u8],
+    ) -> TssResult<TpmsAuthCommand> {
+        Ok(TpmsAuthCommand {
+            session_handle: TpmiShAuthSession::RS_PW,
+            nonce: Tpm2bNonce::default(),
+            session_attributes: self.session_attributes,
+            hmac: self.auth,
+        })
+    }
+    fn validate_auth_response<CmdT: TpmCommand>(
+        &mut self,
+        _resp: &CmdT::RespT,
+        _resp_handles: &CmdT::RespHandles,
+        auth: &TpmsAuthResponse,
+        _buf: &mut [u8],
+    ) -> TssResult<()> {
+        if auth.nonce.get_size() != 0
+            || auth.session_attributes != self.session_attributes
+            || auth.hmac.get_size() != 0
+        {
+            Err(TssTcsError::BadParameter.into())
+        } else {
+            Ok(())
+        }
+    }
 }
 
 // A simple Hmac session.
