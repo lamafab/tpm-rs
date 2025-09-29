@@ -318,7 +318,8 @@ impl TryFrom<u32> for TpmiRhNvIndex {
 /// See definition in Part 2: Structures, section 9.8.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Debug, Default, Marshalable)]
-pub struct TpmiShAuthSession(u32);
+// TODO: inner type was made public. Right call?
+pub struct TpmiShAuthSession(pub u32);
 impl TryFrom<u32> for TpmiShAuthSession {
     type Error = TpmRcError;
     fn try_from(value: u32) -> Result<Self, Self::Error> {

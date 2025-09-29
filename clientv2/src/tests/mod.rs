@@ -3,7 +3,7 @@ use std::fs;
 use crate::{
     algo::{AlgoSha256, AlgoSha256Hmac},
     crypto::session_key,
-    session::HmacSession,
+    session::{HmacSession, PasswordSession},
     tpm::{run_command_with_handles, FileIoTpm},
 };
 use rsa::{pkcs8::DecodePublicKey, Pkcs1v15Encrypt, RsaPublicKey};
@@ -12,7 +12,7 @@ use tpm2_rs_base::{
         CreatePrimaryCmd, LoadCmd, LoadExternalCmd, ReadPublicCmd, StartAuthSessionCmd,
         StartAuthSessionHandles,
     },
-    constants::TpmSe,
+    constants::{TpmHandle, TpmHc, TpmSe},
     PublicParmsAndId, Tpm2bAuth, Tpm2bData, Tpm2bDigest, Tpm2bEncryptedSecret, Tpm2bNonce,
     Tpm2bPublic, Tpm2bPublicKeyRsa, Tpm2bSensitive, Tpm2bSensitiveCreate, Tpm2bSensitiveData,
     Tpm2bSimple, Tpm2bStruct, TpmaObject, TpmaSession, TpmiAlgHash, TpmiDhEntity, TpmiDhObject,
@@ -124,53 +124,13 @@ fn test_start_auth_create_primary_with_rsa_encryption() {
     let mut tpm = FileIoTpm::new("/dev/tpmrm0").unwrap();
     let auth_val = vec![];
 
-    // ## Prepare payload for `TPM2_LoadExternal` command.
-    
     /*
-    let object_attributes = TpmaObject::FIXED_TPM
-        | TpmaObject::FIXED_PARENT
-        | TpmaObject::SENSITIVE_DATA_ORIGIN
-        | TpmaObject::USER_WITH_AUTH
-        | TpmaObject::DECRYPT;
-
-    // Use empty auth policy.
-    let auth_policy = Tpm2bDigest::from_bytes(&[]).unwrap();
-
-    let rsa_id = hex::decode("bbc7e82763862a98fc2e0c0d998ff77d976565b10d71c9a304c0426a28efeda3294d300e7475e111a96e392f60e57bf8c0b5f5363bbffad4864d05fce2bc43c3c41d1fd99ea4e314396ecb8deb3bbb526c65cefa81bb1d70c2015878f5a4238c398a2392779fa5843a7276a9a3ace9aa1c8d9e9293673f2f5b541ede88ef76d52e1b6fb5b8c73e0dfe33fcbba2b8e83bf3457071e9db88d6f68c08c4ffa2eedf3b5f432d12d1fe62ccd9a1404b7e2b323a0ca119efe3d82346fa1463cf46faf21ce8ab97b76b18dceea05d0fc31d89b39ad501ea900373279b850c7a82a32b0284fe42aae2acf2b2fec2ab89e8ad4b8a0b224325601d6bc0cfece763d72de543").unwrap();
-    let parms_and_id = PublicParmsAndId::Rsa(
-        TpmsRsaParms {
-            symmetric: tpm2_rs_base::TpmtSymDefObject::Null(TpmsEmpty, TpmsEmpty),
-            scheme: tpm2_rs_base::TpmtRsaScheme::Null(TpmsEmpty),
-            /*
-            scheme: tpm2_rs_base::TpmtRsaScheme::Oaep(TpmsEncSchemeOaep {
-                hash_alg: TpmiAlgHash::SHA256,
-            }),
-            */
-            key_bits: TpmiRsaKeyBits::Rsa2048,
-            exponent: 65537,
-        },
-        Tpm2bPublicKeyRsa::from_bytes(&rsa_id).unwrap(),
-    );
-
-    let in_public = Tpm2bPublic::from_struct(&TpmtPublic {
-        name_alg: TpmiAlgHash::SHA256,
-        object_attributes,
-        auth_policy,
-        parms_and_id,
-    })
-    .unwrap();
-
-    let cmd = LoadExternalCmd {
-        in_private: Tpm2bSensitive::from_bytes(&[]).unwrap(),
-        in_public,
-        hierarchy: TpmiRhHierarchy::TpmRhOwner,
-    };
-
+    let cmd = ReadPublicCmd {};
+    let cmd_handles = TpmiDhObject(0x81000011);
     let mut cmd_session = ();
-    let cmd_handles = ();
 
-    // ### Execute `TPM2_LoadExternal` command!
-    let (_resp, object_handle) =
+    // ### Execute `TPM2_StartAuthSession` command!
+    let (resp, session_handle) =
         run_command_with_handles(&cmd, &cmd_handles, &mut cmd_session, &mut tpm).unwrap();
     */
 
@@ -189,7 +149,7 @@ fn test_start_auth_create_primary_with_rsa_encryption() {
     //let padding = rsa::Oaep::new_with_mgf_hash_and_label::<sha2::Sha256, sha2::Sha256, &str>("");
     let encrypted_salt = rsa.encrypt(&mut rng, padding, &salt).unwrap();
 
-    let encrypted_salt = [];
+    //let encrypted_salt = [];
     let encrypted_salt = Tpm2bEncryptedSecret::from_bytes(&encrypted_salt).unwrap();
 
     let cmd = StartAuthSessionCmd {
@@ -201,12 +161,16 @@ fn test_start_auth_create_primary_with_rsa_encryption() {
     };
 
     let cmd_handles = StartAuthSessionHandles {
-        tpm_key: TpmiDhObject::RHNull,
-        //tpm_key: TpmiDhObject(0x81000011),
-        bind: TpmiDhEntity(0x81000011),
+        tpm_key: TpmiDhObject(0x81000011),
+        //tpm_key: TpmiDhObject(object_handle.0),
+        bind: TpmiDhEntity::RHOwner,
     };
 
     let mut cmd_session = ();
+    /*let mut cmd_session = PasswordSession::new(
+        Tpm2bAuth::from_bytes(&auth_val).unwrap(),
+        TpmaSession::CONTINUE_SESSION,
+    );*/
 
     // ### Execute `TPM2_StartAuthSession` command!
     let (resp, session_handle) =
