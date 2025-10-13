@@ -318,7 +318,8 @@ impl TryFrom<u32> for TpmiRhNvIndex {
 /// See definition in Part 2: Structures, section 9.8.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Debug, Default, Marshalable)]
-pub struct TpmiShAuthSession(u32);
+// TODO: inner type was made public. Right call?
+pub struct TpmiShAuthSession(pub u32);
 impl TryFrom<u32> for TpmiShAuthSession {
     type Error = TpmRcError;
     fn try_from(value: u32) -> Result<Self, Self::Error> {
@@ -925,6 +926,7 @@ pub struct Tpm2bSensitiveCreate {
 #[marshalable(tpm2b_simple)]
 pub struct Tpm2bPublicKeyRsa {
     size: u16,
+    #[marshalable(length=size)]
     buffer: [u8; TPM2_MAX_RSA_KEY_BYTES as usize],
 }
 
@@ -972,6 +974,7 @@ pub enum TpmuEncryptedSecret {
 #[marshalable(tpm2b_simple)]
 pub struct Tpm2bEncryptedSecret {
     size: u16,
+    #[marshalable(length=size)]
     secret: [u8; TpmuEncryptedSecret::UNION_SIZE],
 }
 
@@ -1425,9 +1428,11 @@ pub struct TpmsAuthResponse {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug, Marshalable)]
+#[marshalable(tpm2b_simple)]
 pub struct Tpm2bSensitive {
     size: u16,
+    #[marshalable(length=size)]
     sensitive_area: [u8; size_of::<TpmtSensitive>()],
 }
 
