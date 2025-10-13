@@ -64,12 +64,12 @@ impl<T: Session> AuthorizationArea for T {
             return TssResult::Err(TssTcsError::OutOfMemory.into());
         }
 
-        // Marshal the authorization area _after_ its reserved size indicator.
+        // Marshal the authorization area *after* its reserved size indicator.
         let n = self
             .get_auth_command(cmd, handles, buf)?
             .try_marshal(&mut buf[SIZE_LEN..])?;
 
-        // Marshal the size indicator _before_ the authorization area.
+        // Marshal the size indicator *before* the authorization area.
         (n as u32).try_marshal(&mut buf[..SIZE_LEN])?;
 
         Ok(SIZE_LEN + n)

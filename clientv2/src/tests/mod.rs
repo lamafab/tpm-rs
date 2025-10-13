@@ -137,7 +137,7 @@ fn test_start_auth_create_primary_with_rsa_encryption() {
     let mut rng = rsa::rand_core::OsRng;
     let salt = rand::random::<[u8; 32]>();
     let padding =
-        rsa::Oaep::new_with_mgf_hash_and_label::<sha2::Sha256, sha2::Sha256, &str>("SECRET\0");
+        rsa::Oaep::new_with_mgf_hash_and_label::<sha2::Sha256, sha2::Sha256, &str>("SECRET\0"); // NOTE the null terminator!
 
     //let padding = rsa::Oaep::new_with_mgf_hash_and_label::<sha2::Sha256, sha2::Sha256, &str>("");
     let encrypted_salt = rsa.encrypt(&mut rng, padding, &salt).unwrap();
@@ -213,7 +213,7 @@ fn test_start_auth_create_primary_with_rsa_encryption() {
     };
 
     let session_key =
-        session_key::<AlgoSha256Hmac>(&[], &salt, &resp.nonce_tpm, &nonce_caller).unwrap();
+        session_key::<AlgoSha256Hmac>(&auth_val, &salt, &resp.nonce_tpm, &nonce_caller).unwrap();
 
     let mut session = HmacSession::<AlgoSha256>::new(
         auth_val,
