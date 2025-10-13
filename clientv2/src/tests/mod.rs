@@ -20,6 +20,7 @@ use tpm2_rs_base::{
     TpmsKeyedHashParms, TpmsRsaParms, TpmsSchemeHash, TpmsSensitiveCreate, TpmtKeyedHashScheme,
     TpmtPublic,
 };
+use tpm2_rs_marshalable::{Marshalable, UnmarshalBuf};
 
 #[test]
 fn test_start_auth_create_primary() {
@@ -124,32 +125,28 @@ fn test_start_auth_create_primary_with_rsa_encryption() {
     let mut tpm = FileIoTpm::new("/dev/tpmrm0").unwrap();
     let auth_val = vec![];
 
-    /*
-    let cmd = ReadPublicCmd {};
-    let cmd_handles = TpmiDhObject(0x81000011);
-    let mut cmd_session = ();
-
-    // ### Execute `TPM2_StartAuthSession` command!
-    let (resp, session_handle) =
-        run_command_with_handles(&cmd, &cmd_handles, &mut cmd_session, &mut tpm).unwrap();
-    */
-
     // ## Prepare payload for `TPM2_StartAuthSession` command.
 
     // Setup the TPM's RSA public key.
-    let rsa_pem = fs::read_to_string("../ek_public.pem").unwrap();
+    let rsa_pem = fs::read_to_string("../public.pem").unwrap();
     let rsa = RsaPublicKey::from_public_key_pem(&rsa_pem).unwrap();
 
     // Generate random nonce, use empty salt.
     let nonce_caller = Tpm2bNonce::from_bytes(&rand::random::<[u8; 32]>()).unwrap();
 
+    //let l = &[53 45 43 52 45 54 00];
     let mut rng = rsa::rand_core::OsRng;
     let salt = rand::random::<[u8; 32]>();
-    let padding = rsa::Oaep::new::<sha2::Sha256>();
+    let padding =
+        rsa::Oaep::new_with_mgf_hash_and_label::<sha2::Sha256, sha2::Sha256, &str>("SECRET\0");
+
     //let padding = rsa::Oaep::new_with_mgf_hash_and_label::<sha2::Sha256, sha2::Sha256, &str>("");
     let encrypted_salt = rsa.encrypt(&mut rng, padding, &salt).unwrap();
+    dbg!(&encrypted_salt);
 
-    //let encrypted_salt = [];
+    assert_eq!(salt.len(), 32);
+    assert_eq!(encrypted_salt.len(), 256);
+    //
     let encrypted_salt = Tpm2bEncryptedSecret::from_bytes(&encrypted_salt).unwrap();
 
     let cmd = StartAuthSessionCmd {
@@ -161,16 +158,11 @@ fn test_start_auth_create_primary_with_rsa_encryption() {
     };
 
     let cmd_handles = StartAuthSessionHandles {
-        tpm_key: TpmiDhObject(0x81000011),
-        //tpm_key: TpmiDhObject(object_handle.0),
+        tpm_key: TpmiDhObject(0x81000100),
         bind: TpmiDhEntity::RHOwner,
     };
 
     let mut cmd_session = ();
-    /*let mut cmd_session = PasswordSession::new(
-        Tpm2bAuth::from_bytes(&auth_val).unwrap(),
-        TpmaSession::CONTINUE_SESSION,
-    );*/
 
     // ### Execute `TPM2_StartAuthSession` command!
     let (resp, session_handle) =
