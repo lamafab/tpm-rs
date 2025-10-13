@@ -134,7 +134,6 @@ fn test_start_auth_create_primary_with_rsa_encryption() {
     // Generate random nonce, use empty salt.
     let nonce_caller = Tpm2bNonce::from_bytes(&rand::random::<[u8; 32]>()).unwrap();
 
-    //let l = &[53 45 43 52 45 54 00];
     let mut rng = rsa::rand_core::OsRng;
     let salt = rand::random::<[u8; 32]>();
     let padding =
@@ -167,8 +166,6 @@ fn test_start_auth_create_primary_with_rsa_encryption() {
     // ### Execute `TPM2_StartAuthSession` command!
     let (resp, session_handle) =
         run_command_with_handles(&cmd, &cmd_handles, &mut cmd_session, &mut tpm).unwrap();
-
-    return;
 
     // ## Prepare payload for `TPM2_CreatePrimary`
 
