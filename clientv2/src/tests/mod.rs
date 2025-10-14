@@ -277,9 +277,8 @@ fn test_start_auth_create_primary_with_unseal() {
     })
     .unwrap();
 
-    let object_attributes = TpmaObject::FIXED_TPM
-        | TpmaObject::FIXED_PARENT
-        | TpmaObject::USER_WITH_AUTH;
+    let object_attributes =
+        TpmaObject::FIXED_TPM | TpmaObject::FIXED_PARENT | TpmaObject::USER_WITH_AUTH;
 
     // Use empty auth policy.
     let auth_policy = Tpm2bDigest::from_bytes(&[]).unwrap();
@@ -326,13 +325,18 @@ fn test_start_auth_create_primary_with_unseal() {
         resp.nonce_tpm,
     );
 
+    let mut session = PasswordSession::new(
+        Tpm2bDigest::from_bytes(&auth_val).unwrap(),
+        TpmaSession::CONTINUE_SESSION,
+    );
+
     // ### Execute `TPM2_CreatePrimary` command!
     let cmd_handle = TpmiRhHierarchy::TpmRhOwner;
     let (resp, object_handle) =
         run_command_with_handles(&cmd, &cmd_handle, &mut session, &mut tpm).unwrap();
 
     dbg!(object_handle);
-    dbg!(session.session_handle());
+    //dbg!(session.session_handle());
     //session.set_session_handle(session_handle);
 
     /*
