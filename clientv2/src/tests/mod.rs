@@ -23,7 +23,7 @@ use tpm2_rs_base::{
 use tpm2_rs_marshalable::{Marshalable, UnmarshalBuf};
 
 #[test]
-fn test_start_auth_create_primary() {
+fn test_start_auth_create_primary_simple() {
     // Use the specified TPM, with and empty auth key!
     let mut tpm = FileIoTpm::new("/dev/tpmrm0").unwrap();
     let auth_val = vec![];
@@ -59,6 +59,7 @@ fn test_start_auth_create_primary() {
     // Use empty auth, generate random sensitive data.
     let in_sensitive = Tpm2bSensitiveCreate::from_struct(&TpmsSensitiveCreate {
         user_auth: Tpm2bAuth::from_bytes(&[]).unwrap(),
+        // TODO: Note that if this is empty, object attribute must have `SENSITIVE_DATA_ORIGIN` set.
         data: Tpm2bSensitiveData::from_bytes(&rand::random::<[u8; 32]>()).unwrap(),
     })
     .unwrap();
@@ -234,7 +235,8 @@ fn test_start_auth_create_primary_with_rsa_encryption() {
 fn test_start_auth_create_primary_with_unseal() {
     // Use the specified TPM, with and empty auth key!
     let mut tpm = FileIoTpm::new("/dev/tpmrm0").unwrap();
-    let auth_val = vec![];
+    let auth_val = [];
+    let salt = [];
 
     // ## Prepare payload for `TPM2_StartAuthSession`
 
@@ -278,7 +280,6 @@ fn test_start_auth_create_primary_with_unseal() {
     let object_attributes = TpmaObject::FIXED_TPM
         | TpmaObject::FIXED_PARENT
         | TpmaObject::USER_WITH_AUTH;
-        //| TpmaObject::SENSITIVE_DATA_ORIGIN;
 
     // Use empty auth policy.
     let auth_policy = Tpm2bDigest::from_bytes(&[]).unwrap();
@@ -315,10 +316,10 @@ fn test_start_auth_create_primary_with_unseal() {
     };
 
     let session_key =
-        session_key::<AlgoSha256Hmac>(&auth_val, &[], &resp.nonce_tpm, &nonce_caller).unwrap();
+        session_key::<AlgoSha256Hmac>(&auth_val, &salt, &resp.nonce_tpm, &nonce_caller).unwrap();
 
     let mut session = HmacSession::<AlgoSha256>::new(
-        auth_val,
+        auth_val.to_vec(),
         session_handle,
         TpmaSession::CONTINUE_SESSION,
         Some(session_key),
@@ -327,10 +328,11 @@ fn test_start_auth_create_primary_with_unseal() {
 
     // ### Execute `TPM2_CreatePrimary` command!
     let cmd_handle = TpmiRhHierarchy::TpmRhOwner;
-    let (resp, session_handle) =
+    let (resp, object_handle) =
         run_command_with_handles(&cmd, &cmd_handle, &mut session, &mut tpm).unwrap();
 
-    dbg!(session_handle);
+    dbg!(object_handle);
+    dbg!(session.session_handle());
     //session.set_session_handle(session_handle);
 
     /*
@@ -348,7 +350,7 @@ fn test_start_auth_create_primary_with_unseal() {
 
     // ### Execute `TPM2_Unseal` command!
     let cmd = UnsealCmd;
-    let cmd_handle = TpmiDhObject(session_handle.0);
+    let cmd_handle = TpmiDhObject(object_handle.0);
 
     let (resp, handle) =
         run_command_with_handles(&cmd, &cmd_handle, &mut session, &mut tpm).unwrap();

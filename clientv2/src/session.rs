@@ -117,6 +117,9 @@ where
             nonce_tpm,
         }
     }
+    pub fn session_handle(&self) -> TpmiShAuthSession {
+        self.session_handle
+    }
 }
 
 /// Spec (Part 1): 17.6 Session-Based Authorizations
