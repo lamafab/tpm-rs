@@ -2,7 +2,9 @@
 
 use crate::commands::{Marshalable, TpmCommand};
 use crate::constants::{TpmCc, TpmHandle};
-use crate::{Tpm2bName, Tpm2bPublic, Tpm2bSensitive, TpmiDhObject, TpmiRhHierarchy};
+use crate::{
+    Tpm2bName, Tpm2bPublic, Tpm2bSensitive, Tpm2bSensitiveData, TpmiDhObject, TpmiRhHierarchy,
+};
 
 /// [TPM2.0 1.83] 12.1 TPM2_Create (Command)
 pub struct CreateCmd {}
@@ -68,7 +70,24 @@ pub struct ActivateCredentialCmd {}
 pub struct MakeCredentialCmd {}
 
 /// [TPM2.0 1.83] 12.7 TPM2_Unseal (Command)
-pub struct UnsealCmd {}
+#[repr(C)]
+#[derive(Clone, Copy, PartialEq, Marshalable)]
+pub struct UnsealCmd;
+
+impl TpmCommand for UnsealCmd {
+    const CMD_CODE: TpmCc = TpmCc::Unseal;
+
+    type Handles = TpmiDhObject;
+    type RespT = UnsealResp;
+    type RespHandles = ();
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, PartialEq, Marshalable)]
+/// [TPM2.0 1.83] 12.7 TPM2_Unseal (Response)
+pub struct UnsealResp {
+    pub out_data: Tpm2bSensitiveData,
+}
 
 /// [TPM2.0 1.83] 12.8 TPM2_ObjectChangeAuth (Command)
 pub struct ObjectChangeAuthCmd {}
