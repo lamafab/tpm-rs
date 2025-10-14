@@ -275,8 +275,10 @@ fn test_start_auth_create_primary_with_unseal() {
     })
     .unwrap();
 
-    let object_attributes =
-        TpmaObject::FIXED_TPM | TpmaObject::FIXED_PARENT | TpmaObject::USER_WITH_AUTH;
+    let object_attributes = TpmaObject::FIXED_TPM
+        | TpmaObject::FIXED_PARENT
+        | TpmaObject::USER_WITH_AUTH;
+        //| TpmaObject::SENSITIVE_DATA_ORIGIN;
 
     // Use empty auth policy.
     let auth_policy = Tpm2bDigest::from_bytes(&[]).unwrap();
@@ -329,7 +331,22 @@ fn test_start_auth_create_primary_with_unseal() {
         run_command_with_handles(&cmd, &cmd_handle, &mut session, &mut tpm).unwrap();
 
     dbg!(session_handle);
+    //session.set_session_handle(session_handle);
 
+    /*
+    // ### Execute `TPM2_LoadExternal` command!
+    let cmd = LoadExternalCmd {
+        in_private: Tpm2bSensitive::from_bytes(&[]).unwrap(),
+        in_public: resp.out_public,
+        hierarchy: TpmiRhHierarchy::TpmRhOwner,
+    };
+    let cmd_handle = ();
+
+    let (resp, session_handle) = run_command_with_handles(&cmd, &cmd_handle, &mut session, &mut tpm).unwrap();
+    dbg!(session_handle);
+    */
+
+    // ### Execute `TPM2_Unseal` command!
     let cmd = UnsealCmd;
     let cmd_handle = TpmiDhObject(session_handle.0);
 

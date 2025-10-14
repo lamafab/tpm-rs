@@ -3,8 +3,8 @@ use crate::{
     crypto::{cp_hash, hmac_computation, rp_hash, session_key},
 };
 use tpm2_rs_base::{
-    commands::TpmCommand, Tpm2bAuth, Tpm2bData, Tpm2bDigest, Tpm2bNonce, Tpm2bSimple, TpmaSession,
-    TpmiShAuthSession, TpmsAuthCommand, TpmsAuthResponse,
+    commands::TpmCommand, constants::TpmHandle, Tpm2bAuth, Tpm2bData, Tpm2bDigest, Tpm2bNonce,
+    Tpm2bSimple, TpmaSession, TpmiShAuthSession, TpmsAuthCommand, TpmsAuthResponse,
 };
 use tpm2_rs_errors::{TssResult, TssTcsError};
 
