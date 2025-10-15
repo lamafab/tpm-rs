@@ -255,7 +255,7 @@ fn test_start_auth_create_primary_with_unseal() {
 
     let cmd_handles = StartAuthSessionHandles {
         tpm_key: TpmiDhObject::RHNull,
-        bind: TpmiDhEntity::RHOwner,
+        bind: TpmiDhEntity::RHNull,
     };
 
     let mut cmd_session = ();
@@ -326,7 +326,7 @@ fn test_start_auth_create_primary_with_unseal() {
     );
 
     // ### Execute `TPM2_CreatePrimary` command!
-    let cmd_handle = TpmiRhHierarchy::TpmRhOwner;
+    let cmd_handle = TpmiRhHierarchy::TpmRhNull;
     let (resp, object_handle) =
         run_command_with_handles(&cmd, &cmd_handle, &mut session, &mut tpm).unwrap();
 
