@@ -1,6 +1,6 @@
 use crate::algo::{AlgoDigestHasher, AlgoDigestHmac};
 use tpm2_rs_base::{
-    commands::TpmCommand, Tpm2bDigest, Tpm2bName, Tpm2bNonce, Tpm2bPublic, Tpm2bSimple, TpmaSession
+    commands::TpmCommand, Tpm2bDigest, Tpm2bName, Tpm2bNonce, Tpm2bPublic, Tpm2bSimple, TpmaSession,
 };
 use tpm2_rs_errors::{TssResult, TssTcsError};
 use tpm2_rs_marshalable::Marshalable;

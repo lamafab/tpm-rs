@@ -4,7 +4,6 @@ members = [
     "base",
     "client",
     "clientv2",
-    "clientv3",
     "errors",
     "marshalable",
     "marshalable-derive",
