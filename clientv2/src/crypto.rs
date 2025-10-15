@@ -1,5 +1,7 @@
 use crate::algo::{AlgoDigestHasher, AlgoDigestHmac};
-use tpm2_rs_base::{commands::TpmCommand, Tpm2bDigest, Tpm2bNonce, Tpm2bSimple, TpmaSession};
+use tpm2_rs_base::{
+    commands::TpmCommand, Tpm2bDigest, Tpm2bName, Tpm2bNonce, Tpm2bPublic, Tpm2bSimple, TpmaSession
+};
 use tpm2_rs_errors::{TssResult, TssTcsError};
 use tpm2_rs_marshalable::Marshalable;
 
@@ -51,6 +53,7 @@ where
 pub fn cp_hash<CmdT: TpmCommand, H: AlgoDigestHasher>(
     cmd: &CmdT,
     cmd_handles: &CmdT::Handles,
+    object_name: Option<Tpm2bName>,
     wrk_buf: &mut [u8],
 ) -> TssResult<H::Output> {
     let mut hash = H::new();
@@ -58,8 +61,12 @@ pub fn cp_hash<CmdT: TpmCommand, H: AlgoDigestHasher>(
     let n = CmdT::CMD_CODE.try_marshal(wrk_buf)?;
     hash.update(&wrk_buf[..n]);
 
-    let n = cmd_handles.try_marshal(wrk_buf)?;
-    hash.update(&wrk_buf[..n]);
+    if let Some(name) = object_name {
+        hash.update(name.get_buffer());
+    } else {
+        let n = cmd_handles.try_marshal(wrk_buf)?;
+        hash.update(&wrk_buf[..n]);
+    }
 
     let n = cmd.try_marshal(wrk_buf)?;
     hash.update(&wrk_buf[..n]);

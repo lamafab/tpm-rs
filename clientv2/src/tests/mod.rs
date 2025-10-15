@@ -325,15 +325,14 @@ fn test_start_auth_create_primary_with_unseal() {
         resp.nonce_tpm,
     );
 
-    let mut session = PasswordSession::new(
-        Tpm2bDigest::from_bytes(&auth_val).unwrap(),
-        TpmaSession::CONTINUE_SESSION,
-    );
-
     // ### Execute `TPM2_CreatePrimary` command!
     let cmd_handle = TpmiRhHierarchy::TpmRhOwner;
     let (resp, object_handle) =
         run_command_with_handles(&cmd, &cmd_handle, &mut session, &mut tpm).unwrap();
+
+    assert!(TpmHc::is_transient_object(object_handle.0));
+
+    session.set_object_name(resp.name);
 
     dbg!(object_handle);
 
