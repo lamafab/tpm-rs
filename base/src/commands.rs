@@ -1,5 +1,5 @@
 use crate::constants::TpmCc;
-use crate::Marshalable;
+use crate::{Marshalable, Tpm2bPublic};
 
 // [TPM2.0 1.83] 9 Start-up
 mod startup;

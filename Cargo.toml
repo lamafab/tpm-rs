@@ -2,13 +2,14 @@
 resolver = "2"
 members = [
     "base",
-    "client", "clientv2",
+    "client",
+    "clientv2",
     "errors",
     "marshalable",
     "marshalable-derive",
     "server",
     "unionify",
-    "unionify-derive"
+    "unionify-derive",
 ]
 
 [workspace.dependencies]
@@ -19,7 +20,7 @@ open-enum = "0.4.1"
 proc-macro2 = "1"
 quote = "1"
 safe-discriminant = "0.2.0"
-syn = {version = "2", features = ["full"]}
+syn = { version = "2", features = ["full"] }
 trybuild = { version = "1.0.89", features = ["diff"] }
 zerocopy = { version = "0.7.0", features = ["derive"] }
 
@@ -34,6 +35,6 @@ tpm2-rs-unionify = { path = "unionify" }
 tpm2-rs-unionify-derive = { path = "unionify-derive" }
 
 [profile.release]
-lto = true          # default is lto = false
-codegen-units = 1   # default is codegen-units = 16
-strip = true        # default is strip = "none"
+lto = true        # default is lto = false
+codegen-units = 1 # default is codegen-units = 16
+strip = true      # default is strip = "none"
